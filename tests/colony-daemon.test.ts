@@ -1,0 +1,24 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import net from 'node:net';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {once} from 'node:events';
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'colony-daemon-'));
+process.env.ANTFARM_HOME=root;
+process.env.OPENCLAW_STATE_DIR=path.join(root,'openclaw');
+process.env.HOST='127.0.0.1';
+delete process.env.PORT;
+const {startDaemon,stopDaemon,getDaemonStatus}=await import('../dist/server/daemonctl.js');
+test.after(()=>{stopDaemon();fs.rmSync(root,{recursive:true,force:true});});
+test('daemon reports its active port even if a caller requests a different one',async()=>{
+  const socket=net.createServer();socket.listen(0,'127.0.0.1');await once(socket,'listening');
+  const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));
+  fs.writeFileSync(path.join(root,'dashboard.json'),JSON.stringify({version:1,workspace:root,port}));
+  const first=await startDaemon();assert.equal(first.port,port);
+  const second=await startDaemon(port===65535?65534:port+1);
+  assert.equal(second.pid,first.pid);
+  assert.equal(second.port,port);
+  assert.equal(getDaemonStatus()?.port,port);
+});

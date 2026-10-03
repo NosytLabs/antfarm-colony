@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en" data-theme="moss">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#101713">
+  <title>Antfarm Colony — a living workspace for your agents</title>
+  <meta name="description" content="A pixel-art ant colony for real multi-agent workflows. Plan, build, verify and follow durable handoffs.">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to colony</a>
+  <div class="app-shell">
+    <aside class="rail" aria-label="Primary navigation">
+      <a class="rail-mark" href="#colony" aria-label="Antfarm home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v5M8 8l4 4M24 8l-4 4M7 18h5m8 0h5M9 27l4-5m10 5-4-5"/><ellipse cx="16" cy="13" rx="4" ry="5"/><ellipse cx="16" cy="22" rx="6" ry="7"/></svg>
+      </a>
+      <nav class="rail-nav">
+        <button class="rail-link is-active" type="button" data-view="colony" aria-current="page" title="Colony">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18c2-7 4-11 8-11s6 4 8 11M7 18h10M9 13h6"/></svg><span>Colony</span>
+        </button>
+        <button class="rail-link" type="button" data-view="workflows" title="Workflows">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h4a4 4 0 0 0 4-4V6m-8 6h4a4 4 0 0 1 4 4v2"/></svg><span>Flows</span>
+        </button>
+        <button class="rail-link" type="button" data-view="growth" title="Growth">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V10m0 5c-4 0-7-2-7-6 4 0 7 2 7 6Zm0-5c0-4 3-6 7-6 0 4-3 6-7 6Z"/></svg><span>Growth</span>
+        </button>
+      </nav>
+      <div class="rail-bottom">
+        <button class="rail-link" type="button" id="connections-button" title="Connections">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V3m6 4V3M7 7h10v4a5 5 0 0 1-5 5v5m-4 0h8"/></svg><span>Connect</span>
+        </button>
+        <button class="rail-link" type="button" id="settings-button" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8 8 0 0 0-1.8-1L14.4 3h-4.8l-.4 3.1a8 8 0 0 0-1.8 1l-2.4-1-2 3.4L5.1 11a7 7 0 0 0 0 2L3 14.5l2 3.4 2.4-1a8 8 0 0 0 1.8 1l.4 3.1h4.8l.4-3.1a8 8 0 0 0 1.8-1l2.4 1 2-3.4-2.1-1.5a7 7 0 0 0 .1-1Z"/></svg><span>Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="app-frame">
+      <header class="topbar">
+        <div class="brand-lockup">
+          <span class="brand">ANTFARM <b>COLONY</b></span>
+          <span class="brand-divider"></span>
+          <span class="colony-name"><b>Nosyt Labs</b><small>The first colony</small></span>
+        </div>
+        <div class="topbar-actions">
+          <div class="mode-switch" role="group" aria-label="Data mode">
+            <button type="button" data-mode="live" class="is-active"><i></i>Live</button>
+            <button type="button" data-mode="demo">Demo</button>
+          </div>
+          <button class="button button-primary" type="button" data-open-mission>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            New mission <kbd>N</kbd>
+          </button>
+        </div>
+      </header>
+
+      <div id="connection-banner" class="connection-banner" hidden></div>
+      <div id="demo-banner" class="demo-banner" hidden>
+        <span><b>DEMO COLONY</b> Sample ants and missions live only in this browser.</span>
+        <button type="button" data-mode="live">Return to live</button>
+      </div>
+
+      <main id="main" tabindex="-1">
+        <section class="page-view is-active" id="colony-view" data-page="colony">
+          <div class="hero-copy">
+            <div>
+              <p class="eyebrow">A LITTLE WORLD. REAL WORK.</p>
+              <h1>Your colony, at work.</h1>
+            </div>
+            <p class="hero-deck">Small specialists. Shared purpose.<br>Watch the work find its way.</p>
+          </div>
+
+          <aside id="onboarding-panel" class="onboarding" aria-labelledby="onboarding-title" tabindex="-1" hidden>
+            <header class="onboarding__header">
+              <div>
+                <p class="eyebrow">WELCOME TO THE COLONY</p>
+                <h2 id="onboarding-title">Three steps to real work</h2>
+                <p>Begin with a safe local map, connect your own runtime, then choose the team for the mission.</p>
+              </div>
+              <button id="onboarding-dismiss" class="onboarding__close" type="button" aria-label="Dismiss setup checklist">×</button>
+            </header>
+            <div class="onboarding__diagnostics" aria-live="polite">
+              <span><small>WORKSPACE</small><b id="onboarding-workspace">Checking…</b></span>
+              <span><small>OPENCLAW</small><b id="onboarding-openclaw">Checking…</b></span>
+              <span><small>INSTALLED TEAMS</small><b id="onboarding-installed">Checking…</b></span>
+            </div>
+            <ol class="onboarding__steps">
+              <li id="onboarding-step-survey">
+                <span class="onboarding__number">1</span>
+                <div><h3>Map the local repository</h3><p>The survey reads the configured workspace and reports inventory and quality signals. It does not edit files or call a model.</p><button id="onboarding-survey" class="text-button" type="button">Start read-only survey <span>→</span></button></div>
+              </li>
+              <li id="onboarding-step-connect">
+                <span class="onboarding__number">2</span>
+                <div><h3>Configure OpenClaw and a provider</h3><p>Bring your own configured runtime. Antseed, Ollama, and OpenCode adapters are documented setup options; availability, capabilities, and costs depend on your configuration.</p><button id="onboarding-connections" class="text-button" type="button">Open connection guide <span>→</span></button></div>
+              </li>
+              <li id="onboarding-step-install">
+                <span class="onboarding__number">3</span>
+                <div class="onboarding__install">
+                  <h3>Install a team, then dispatch</h3>
+                  <p>Installation is an explicit terminal action and updates the selected OpenClaw configuration.</p>
+                  <label for="onboarding-workflow">Workflow team</label>
+                  <div class="onboarding__command-row"><select id="onboarding-workflow"><option value="feature-dev">Feature development</option><option value="bug-fix">Bug fix</option><option value="security-audit">Security audit</option></select><code id="onboarding-command">npm run cli -- workflow install feature-dev</code><button id="onboarding-copy" type="button">Copy</button></div>
+                  <button id="onboarding-dispatch" class="text-button" type="button">Open mission brief <span>→</span></button>
+                </div>
+              </li>
+            </ol>
+            <footer class="onboarding__footer"><span id="onboarding-status">Reading live diagnostics…</span><div><button id="onboarding-refresh" type="button">Refresh status</button><button id="onboarding-demo" type="button">Explore demo</button></div></footer>
+          </aside>
+
+          <div class="workspace-grid">
+            <section class="scene-card" aria-labelledby="underground-title">
+              <header class="card-header scene-header">
+                <div>
+                  <p class="eyebrow" id="underground-title">THE UNDERGROUND</p>
+                  <div class="scene-caption"><span id="scene-status-dot" class="status-dot"></span><span id="scene-status">Connecting to colony…</span></div>
+                </div>
+                <div class="scene-switches">
+                  <label class="check-control"><input id="trails-toggle" type="checkbox" checked><span>Trails</span></label>
+                  <label class="check-control"><input id="labels-toggle" type="checkbox" checked><span>Labels</span></label>
+                  <button class="icon-button" id="pause-button" type="button" aria-pressed="false" title="Pause animation (Space)">
+                    <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+                    <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"/></svg>
+                    <span class="sr-only">Pause animation</span>
+                  </button>
+                </div>
+              </header>
+              <div class="scene-viewport" id="scene-viewport">
+                <canvas id="colony-canvas" aria-label="Animated cutaway view of the ant colony"></canvas>
+                <div id="chamber-labels" class="chamber-labels"></div>
+                <div id="scene-loading" class="scene-loading" role="status"><span></span>Preparing the underground…</div>
+                <div id="scene-empty" class="scene-empty" hidden>
+                  <div class="empty-emblem" aria-hidden="true">
+                    <svg viewBox="0 0 64 64"><path d="M32 9v10M19 18l7 7m19-7-7 7M16 35h10m12 0h10M19 53l8-10m18 10L37 43"/><ellipse cx="32" cy="28" rx="7" ry="8"/><ellipse cx="32" cy="43" rx="11" ry="13"/></svg>
+                  </div>
+                  <p class="eyebrow">THE TUNNELS ARE QUIET</p>
+                  <h2>Give the colony its first trail.</h2>
+                  <p>A local survey maps the configured repository without changing a file.</p>
+                  <div class="empty-actions">
+                    <button type="button" class="button button-primary" id="empty-survey">Start repository survey</button>
+                    <button type="button" class="button button-ghost" data-mode="demo">Explore demo</button>
+                  </div>
+                </div>
+                <div class="scene-toolbar" aria-label="Scene zoom controls">
+                  <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+                  <output id="zoom-level" aria-live="polite">100%</output>
+                  <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+                  <button type="button" id="zoom-reset" aria-label="Reset zoom" title="Reset zoom">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6M4 4v4.6h4.6"/></svg>
+                  </button>
+                </div>
+              </div>
+              <footer class="scene-footer">
+                <span><i class="footer-pip"></i><b id="scene-mode-label">LIVE COLONY</b> · <span id="scene-updated">Awaiting first sync</span></span>
+                <button type="button" id="snapshot-button">Export snapshot <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 20h14"/></svg></button>
+              </footer>
+            </section>
+
+            <aside class="activity-card" aria-labelledby="activity-title">
+              <header class="card-header activity-heading">
+                <div><p class="eyebrow">RIGHT NOW</p><h2 id="activity-title">Colony activity</h2></div>
+                <span class="live-count"><i></i><b id="active-count">0</b> active</span>
+              </header>
+              <div class="tabs" role="tablist" aria-label="Colony activity">
+                <button id="missions-tab" type="button" role="tab" aria-selected="true" aria-controls="activity-panel" data-tab="missions">Missions <span id="mission-count">0</span></button>
+                <button type="button" role="tab" aria-selected="false" aria-controls="activity-panel" data-tab="ants">Ants <span id="ant-count">0</span></button>
+                <button type="button" role="tab" aria-selected="false" aria-controls="activity-panel" data-tab="trail">Trail <span id="event-count">0</span></button>
+              </div>
+              <div class="activity-tools" id="mission-filters">
+                <label class="sr-only" for="status-filter">Filter missions</label>
+                <select id="status-filter">
+                  <option value="active">Active work</option>
+                  <option value="all">All missions</option>
+                  <option value="done">Completed</option>
+                  <option value="failed">Needs attention</option>
+                </select>
+                <button type="button" id="refresh-button" title="Refresh now" aria-label="Refresh colony now">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v5h-5M4 18v-5h5M18.5 9A7 7 0 0 0 6.2 6.2L4 11m16 2-2.2 4.8A7 7 0 0 1 5.5 15"/></svg>
+                </button>
+              </div>
+              <div id="activity-panel" class="activity-list" role="tabpanel" aria-labelledby="missions-tab" tabindex="0"></div>
+              <footer class="activity-footer"><span id="activity-summary">No missions yet</span><button type="button" data-open-mission>Dispatch work</button></footer>
+            </aside>
+          </div>
+
+          <div class="lower-grid">
+            <section class="strip-card workflows-strip" aria-labelledby="workflow-strip-title">
+              <div class="strip-intro">
+                <p class="eyebrow">READY TEAMS</p>
+                <h2 id="workflow-strip-title">Explore workflows</h2>
+                <p>Purpose-built trails for work that needs more than one set of mandibles.</p>
+                <button type="button" class="text-button" data-view-target="workflows">See all workflows <span>→</span></button>
+              </div>
+              <div id="workflow-preview" class="workflow-preview"></div>
+            </section>
+            <section class="strip-card growth-strip" aria-labelledby="growth-strip-title">
+              <div class="growth-head"><div><p class="eyebrow">COLONY GROWTH</p><h2 id="growth-strip-title">Milestones</h2></div><button type="button" data-view-target="growth">View all</button></div>
+              <div id="growth-preview" class="growth-preview"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page-view secondary-page" id="workflows-view" data-page="workflows" hidden>
+          <header class="page-header"><div><p class="eyebrow">CURATED TRAILS</p><h1>Workflow teams</h1><p>Each team passes context forward, so planning, building, and review stay connected.</p></div><button class="button button-primary" type="button" data-open-mission>Launch a mission</button></header>
+          <div id="workflow-catalog" class="workflow-catalog"></div>
+        </section>
+
+        <section class="page-view secondary-page" id="growth-view" data-page="growth" hidden>
+          <header class="page-header"><div><p class="eyebrow">COLONY MEMORY</p><h1>Growth &amp; achievements</h1><p>Progress comes from completed live work. Demo progress remains clearly marked.</p></div></header>
+          <div id="achievement-grid" class="achievement-grid"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="mission-dialog" class="modal">
+    <form method="dialog" class="dialog-shell" id="mission-form">
+      <header class="dialog-header"><div><p class="eyebrow">DISPATCH TO THE COLONY</p><h2>Begin a new mission</h2></div><button class="dialog-close" value="cancel" type="submit" formnovalidate aria-label="Close">×</button></header>
+      <div class="dialog-body">
+        <div id="mission-mode-note" class="notice"></div>
+        <label class="field"><span>Workflow team</span><select id="mission-workflow" name="workflowId" required></select></label>
+        <div id="selected-workflow-steps" class="selected-steps"></div>
+        <label class="field"><span>Mission brief</span><textarea id="mission-brief" name="task" rows="6" required minlength="4" maxlength="4000" placeholder="Describe the outcome, relevant context, and what done looks like…"></textarea><small><span id="brief-count">0</span> / <span id="brief-limit">4,000</span></small></label>
+        <p class="form-error" id="mission-error" role="alert" hidden></p>
+      </div>
+      <footer class="dialog-footer"><button class="button button-ghost" type="submit" value="cancel" formnovalidate>Cancel</button><button class="button button-primary" type="submit" value="default" id="launch-button">Dispatch mission <span>→</span></button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="inspector-dialog" class="modal inspector-modal">
+    <div class="dialog-shell">
+      <header class="dialog-header"><div><p class="eyebrow" id="inspector-eyebrow">MISSION DETAILS</p><h2 id="inspector-title">Inspector</h2></div><button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button></header>
+      <div class="dialog-body" id="inspector-body"></div>
+      <footer class="dialog-footer" id="inspector-actions"><button class="button button-ghost" type="button" data-close-dialog>Close</button></footer>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dialog" class="modal">
+    <form method="dialog" class="dialog-shell" id="settings-form">
+      <header class="dialog-header"><div><p class="eyebrow">YOUR VIEW</p><h2>Colony settings</h2></div><button class="dialog-close" value="close" aria-label="Close">×</button></header>
+      <div class="dialog-body settings-grid">
+        <label class="field"><span>Earth palette</span><select id="theme-setting" name="theme"><option value="moss">Moss</option><option value="midnight">Midnight</option><option value="earth">Red earth</option></select></label>
+        <label class="setting-row"><span><b>Chamber labels</b><small>Name rooms inside the scene.</small></span><input id="labels-setting" type="checkbox"></label>
+        <label class="setting-row"><span><b>Pheromone trails</b><small>Show paths made by finished work.</small></span><input id="trails-setting" type="checkbox"></label>
+        <label class="setting-row"><span><b>Reduce motion</b><small>Quiet the colony’s ambient movement.</small></span><input id="motion-setting" type="checkbox"></label>
+      </div>
+      <footer class="dialog-footer"><button class="button button-ghost" value="close">Close</button><button class="button button-primary" id="save-settings" value="save">Save view</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="guide-dialog" class="modal">
+    <div class="dialog-shell">
+      <header class="dialog-header"><div><p class="eyebrow">FIELD GUIDE</p><h2>How this colony works</h2></div><button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button></header>
+      <div class="dialog-body prose">
+        <p>Antfarm turns installed OpenClaw workflows into visible teams. Each ant represents a real workflow agent; each chamber groups a kind of work.</p>
+        <h3>Live work</h3><p>Live missions are stored by the local Antfarm engine in SQLite. A workflow moves through its declared steps, carrying results from one specialist to the next.</p>
+        <h3>Repository survey</h3><p>The built-in survey reads the configured directory locally and reports its inventory and quality signals. It does not edit source files or call a model.</p>
+        <section class="provider-setup" aria-labelledby="antseed-title">
+          <div class="provider-heading"><div><p class="eyebrow">MODEL SUPPLY</p><h3 id="antseed-title">Connect Antseed</h3></div><span class="provider-badge" id="antseed-badge">Not checked</span></div>
+          <p>Discover AI providers through a local buyer proxy. Colony’s starter configuration caps input, output and cached token prices at zero. Free sellers may be offline, quota-limited, or unsuitable for tool use.</p>
+          <ol class="provider-commands"><li><span>Install the pinned CLI</span><code>npm run antseed -- install</code></li><li><span>Create isolated settings</span><code>npm run antseed -- setup</code></li><li><span>Start the buyer in another terminal</span><code>npm run antseed -- start</code></li></ol>
+          <button class="button button-ghost" id="antseed-check" type="button">Check local proxy &amp; models</button>
+          <p id="antseed-status" class="provider-status" role="status">A check only lists models. It does not call a model or fund a wallet.</p>
+          <div id="antseed-models-panel" hidden>
+            <label class="field"><span>Discovered text model</span><select id="antseed-model"></select></label>
+            <p id="antseed-model-note"></p>
+            <p>Print a provider entry, merge it into your OpenClaw configuration, then select that model and restart the gateway.</p>
+            <div class="provider-command"><code id="antseed-config-command"></code><button id="antseed-copy" type="button">Copy</button></div>
+          </div>
+          <p class="guide-links"><a href="https://antseed.com/docs/" target="_blank" rel="noreferrer">Antseed docs ↗</a><a href="https://docs.openclaw.ai/providers/ollama" target="_blank" rel="noreferrer">Local Ollama option ↗</a></p>
+        </section>
+        <h3>Connecting OpenClaw</h3><p>Install and configure OpenClaw, then run <code>npm run cli -- workflow install feature-dev</code> from this project to provision a team. Antfarm checks <code>OPENCLAW_CONFIG_PATH</code> when set, then <code>OPENCLAW_STATE_DIR/openclaw.json</code>, and otherwise <code>~/.openclaw/openclaw.json</code>. Start the colony with <code>npm start</code>. Installation updates the selected OpenClaw configuration; live workers may edit the repository you specify.</p>
+        <p class="guide-links"><a href="https://github.com/snarktank/antfarm" target="_blank" rel="noreferrer">Antfarm source ↗</a><a href="https://github.com/openclaw/openclaw" target="_blank" rel="noreferrer">OpenClaw source ↗</a></p>
+      </div>
+      <footer class="dialog-footer"><button class="button button-ghost" id="open-onboarding" type="button">Open setup checklist</button><button class="button button-primary" type="button" data-close-dialog>Got it</button></footer>
+    </div>
+  </dialog>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/onboarding.js"></script>
+  <script type="module" src="/providers.js"></script>
+</body>
+</html>

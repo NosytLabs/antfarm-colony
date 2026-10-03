@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'colony-settings-'));
+process.env.ANTFARM_HOME=root;
+delete process.env.PORT;
+test.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+test('every dashboard entry point can share saved port settings with explicit overrides',async()=>{
+  const config=await import('../dist/server/config.js');
+  assert.equal(typeof config.resolveDashboardPort,'function');
+  assert.equal(config.resolveDashboardPort(),8114);
+  fs.writeFileSync(config.dashboardConfigPath(),JSON.stringify({version:1,workspace:root,port:8123}));
+  assert.equal(config.resolveDashboardPort(),8123);
+  process.env.PORT='8124'; assert.equal(config.resolveDashboardPort(),8124);
+  assert.equal(config.resolveDashboardPort(8125),8125);
+  process.env.PORT='8124oops'; assert.throws(()=>config.resolveDashboardPort(),/port/i);
+  assert.throws(()=>config.resolveDashboardPort(65536),/port/i);
+  delete process.env.PORT;
+});

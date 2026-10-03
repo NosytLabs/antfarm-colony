@@ -1,0 +1,33 @@
+{
+  "name": "@nosytlabs/antfarm-colony",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "antfarm-colony": "dist/cli/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node scripts/serve.mjs",
+    "cli": "node dist/cli/cli.js",
+    "test": "npm run build && node scripts/test.mjs",
+    "test:colony": "npm run build && node --test tests/colony-*.test.ts tests/colony-*.test.mjs",
+    "test:browser": "npm run build && node scripts/browser-smoke.mjs",
+    "setup": "npm run build && node scripts/setup.mjs",
+    "antseed": "node scripts/antseed.mjs"
+  },
+  "dependencies": {
+    "json5": "^2.2.3",
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3"
+  },
+  "description": "A pixel ant colony for real multi-agent workflows",
+  "license": "MIT"
+}
