@@ -14,6 +14,7 @@ import { cancelRepositorySurvey, createRepositorySurvey, getActiveSurveyCount, S
 import { BridgeValidationError, recordBridgeEvent } from "./bridge.js";
 
 import { readDashboardConfig, resolveDashboardPort } from "./config.js";
+import { startHarnessRun, cancelHarnessRun, resumeHarnessRun, isHarnessWorkflow, HarnessError, recoverHarnessRuns } from './harness.js';
 import { inspectAntseed } from "../integrations/antseed.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -90,7 +91,7 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse, pathna
   try { file = fs.realpathSync(candidate); stat = fs.statSync(file); } catch { throw new HttpError(404, "Not found"); }
   if (!(file === root || file.startsWith(`${root}${path.sep}`))) throw new HttpError(403, "Static symlink leaves the web root");
   if (!stat.isFile()) throw new HttpError(404, "Not found");
-  res.writeHead(200, { "Content-Type": typeFor(file), "Content-Length": stat.size, "Cache-Control": path.basename(file) === "index.html" ? "no-cache" : "public, max-age=3600", "X-Content-Type-Options": "nosniff" });
+  res.writeHead(200, { "Content-Type": typeFor(file), "Content-Length": stat.size, "Cache-Control": path.basename(file) === "index.html" ? "no-cache" : "no-cache", "X-Content-Type-Options": "nosniff" });
   if (req.method === "HEAD") res.end(); else fs.createReadStream(file).pipe(res);
 }
 
@@ -110,6 +111,7 @@ function ensureRuntime(workflowId: string): void {
 export function createDashboardServer(options: DashboardOptions = {}): http.Server {
   const workspace = path.resolve(options.workspace ?? (process.env.ANTFARM_WORKSPACE?.trim() || readDashboardConfig().workspace || process.cwd()));
   const host = options.host ?? (process.env.HOST?.trim() || "127.0.0.1");
+  recoverHarnessRuns();
   return http.createServer(async (req, res) => {
     try {
       const method = req.method ?? "GET";
@@ -142,6 +144,10 @@ export function createDashboardServer(options: DashboardOptions = {}): http.Serv
         const body = await readJson(req);
         const workflowId = stringField(body, "workflowId", 64);
         const task = stringField(body, "task", 10_000);
+        if (isHarnessWorkflow(workflowId)) {
+          try { return json(res, startHarnessRun(workflowId, stringField(body, 'runtime', 32), task, workspace), 201); }
+          catch (error) { if (error instanceof HarnessError) throw new HttpError(409, error.message); throw error; }
+        }
         ensureRuntime(workflowId);
         try { return json(res, await runWorkflow({ workflowId, taskTitle: task }), 201); }
         catch (error) { throw new HttpError(503, `Workflow could not start: ${error instanceof Error ? error.message : String(error)}`); }
@@ -175,6 +181,10 @@ export function createDashboardServer(options: DashboardOptions = {}): http.Serv
         if (!/^[0-9a-f-]{36}$/i.test(runId)) throw new HttpError(400, "Invalid run ID");
         const run = getRunById(runId);
         if (!run) throw new HttpError(404, "Run not found");
+        if (isHarnessWorkflow(run.workflow_id)) {
+          try { return json(res, action[2] === 'cancel' ? cancelHarnessRun(runId) : resumeHarnessRun(runId, workspace)); }
+          catch (error) { throw new HttpError(409, error instanceof Error ? error.message : String(error)); }
+        }
         if (action[2] === "cancel") {
           if (run.workflow_id === "repository-survey") {
             try { return json(res, cancelRepositorySurvey(runId)); }

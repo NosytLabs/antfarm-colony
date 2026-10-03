@@ -76,16 +76,17 @@ export class ColonyScene {
     }
   }
   setState(state){
+    const initial=this.ants.size===0;
     this.state=state;
     const ids=new Set();
-    for(const agent of (state.agents||[]).slice(0,60)){
+    for(const agent of [...(state.agents||[])].sort((a,b)=>Number(['running','review','failed'].includes(b.status))-Number(['running','review','failed'].includes(a.status))||String(b.last_seen||'').localeCompare(String(a.last_seen||''))).slice(0,60)){
       ids.add(agent.id);const seed=hash(agent.id), dest=chamberFor(agent);
       let ant=this.ants.get(agent.id);
       if(!ant){
-        const start=chamber(dest);ant={...agent,x:start.x+(seed%7-3)*26,y:start.y+(seed%3-1)*12,room:dest,destination:dest,path:[],facing:seed%2?1:-1,seed,walkPhase:seed%100};
+        const origin=initial?dest:"nursery",start=chamber(origin);ant={...agent,x:start.x+(seed%7-3)*26,y:start.y+(seed%3-1)*12,room:origin,destination:origin,path:[],facing:seed%2?1:-1,seed,walkPhase:seed%100};
         this.ants.set(agent.id,ant);
       }
-      Object.assign(ant,agent);
+      for(const key of ["name","role","status","task_id","tool","source","last_seen"])ant[key]=agent[key];
       if(dest!==ant.destination){
         // Finish the current tunnel segment before choosing a new route. Going
         // straight back to the last room can cut across the chamber walls.
@@ -98,18 +99,26 @@ export class ColonyScene {
           ant.path=[{x:chamber(ant.room).x,y:chamber(ant.room).y},...routeBetween(ant.room,dest)];
         }
         ant.destination=dest;
-        if(this.settings.reducedMotion)this.settleAnt(ant);
+
       }
       ant.spriteRow={scout:0,builder:1,verifier:2,planner:3}[roleOf(agent)];
     }
     for(const id of this.ants.keys())if(!ids.has(id))this.ants.delete(id);
+    // Stable personal work spots spread workers across a floor instead of piling
+    // every arrival onto the chamber center. Travel still follows the tunnel graph.
+    for(const room of CHAMBERS){
+      const residents=[...this.ants.values()].filter(a=>a.destination===room.id).sort((a,b)=>a.id.localeCompare(b.id));
+      const columns=Math.min(5,residents.length),spacing=Math.min(84,272/Math.max(1,columns-1));
+      residents.forEach((ant,i)=>{ant.slot={x:room.x+(i%5-(columns-1)/2)*spacing,y:room.y+Math.floor(i/5)%3*16-8};});
+    }
+    if(this.settings.reducedMotion)for(const ant of this.ants.values())this.settleAnt(ant);
     this.trails=trailsFromTasks(state.tasks||[],state.agents||[]);
     this.canvas.setAttribute('aria-label',(state.mode==='demo'?'Demo':'Live')+' ant colony with '+(state.agents||[]).length+' workers. Ant details are also available in the Ants tab.');
     this.dirty=true;
   }
   settleAnt(ant){
-    const target=chamber(ant.destination);
-    ant.x=target.x+(ant.seed%7-3)*26;ant.y=target.y+(ant.seed%3-1)*12;
+    const target=ant.slot||chamber(ant.destination);
+    ant.x=target.x;ant.y=target.y;
     ant.room=ant.destination;ant.path=[];ant.moving=false;ant.restUntil=this.time+3;
   }
   setSettings(settings){
@@ -152,7 +161,7 @@ export class ColonyScene {
     for(const ant of this.ants.values()){
       ant.moving=false;
       if(ant.path.length){
-        const next=ant.path[0],dx=next.x-ant.x,dy=next.y-ant.y,d=Math.hypot(dx,dy),speed=70+(ant.seed%25);
+        const next=ant.path[0],dx=next.x-ant.x,dy=next.y-ant.y,d=Math.hypot(dx,dy),speed=104+(ant.seed%17);
         if(d<speed*dt+1){
           ant.x=next.x;ant.y=next.y;ant.path.shift();
           const arrived=CHAMBERS.find(c=>c.x===next.x&&c.y===next.y);
@@ -162,12 +171,12 @@ export class ColonyScene {
         }
         else{ant.x+=dx/d*speed*dt;ant.y+=dy/d*speed*dt;if(Math.abs(dx)>1)ant.facing=dx>0?1:-1;ant.moving=true;}
       }else if(this.time>(ant.restUntil||0)){
-        const home=chamber(ant.room),phase=Math.floor(this.time/5)+(ant.seed%71);
+        const home=ant.slot||chamber(ant.room),phase=Math.floor(this.time/7)+(ant.seed%71);
         // A bounded little job motion inside the chamber, never through walls.
-        const offset=Math.sin(phase*1.7)*82;
-        ant.path=[{x:home.x+offset,y:home.y+((ant.seed%3)-1)*12}];ant.restUntil=this.time+4+ant.seed%4;
+        const offset=Math.sin(phase*1.7)*12;
+        ant.path=[{x:home.x+offset,y:home.y}];ant.restUntil=this.time+4+ant.seed%4;
       }
-      if(ant.moving)ant.walkPhase+=dt*8;
+      if(ant.moving)ant.walkPhase+=dt*7;
     }
   }
   frame(timestamp){
@@ -224,7 +233,7 @@ export class ColonyScene {
     const sequence=working?this.workFrames:this.antFrames;
     const index=ant.moving?Math.floor(ant.walkPhase)%4:working?Math.floor(this.time*3+ant.seed)%4:0;
     const frame=sequence[ant.spriteRow*4+index];
-    const scale=ant.spriteRow===3?.29:.30,w=frame.width*scale,h=frame.height*scale;
+    const w=ant.spriteRow===3?100:94,h=frame.height/frame.width*w;
     ctx.save();ctx.translate(Math.round(ant.x),Math.round(ant.y));
     ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(0,2,w*.38,7,0,0,Math.PI*2);ctx.fill();
     if(isSelected){ctx.strokeStyle='#d2e69c';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,3,w*.48,11,0,0,Math.PI*2);ctx.stroke();}
@@ -232,12 +241,12 @@ export class ColonyScene {
     const color=COLORS[ant.status]||'#c5c4a5';
     ctx.fillStyle='#0d191ee8';ctx.fillRect(-5,-h-13,10,8);ctx.fillStyle=color;ctx.fillRect(-2,-h-11,4,4);
     if(isSelected){
-      const name=String(ant.name||ant.id).slice(0,26),text=name+' · '+ant.status;
+      const name=String(ant.name||ant.id).slice(0,26),text=name+' · '+(ant.path.length&&ant.room!==ant.destination?'To '+chamber(ant.destination).name.toLowerCase():ant.status);
       ctx.font='13px "Geist Pixel",monospace';const width=ctx.measureText(text).width+20;
       ctx.fillStyle='#102015f2';ctx.fillRect(-width/2,-h-45,width,24);ctx.strokeStyle='#698051';ctx.lineWidth=1;ctx.strokeRect(-width/2,-h-45,width,24);
       ctx.fillStyle='#e2eccb';ctx.textAlign='center';ctx.fillText(text,0,-h-28);
     }
-    if(ant.status==='running'&&!ant.moving){
+    if(!this.settings.reducedMotion&&ant.status==='running'&&!ant.moving){
       ctx.fillStyle='#d7dda4';for(let i=0;i<3;i++){const phase=(this.time*1.4+i*.35)%1;ctx.globalAlpha=1-phase;ctx.fillRect(ant.facing*38+(i-1)*7,-9-phase*25,3,3);}ctx.globalAlpha=1;
     }
     ctx.restore();

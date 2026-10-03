@@ -68,3 +68,22 @@ test('overlapping ants select the worker painted in front', () => {
   view.ants.set('back', { id: 'back', x: 300, y: 420 });
   assert.equal(view.hit({ x: 300, y: 400 }).id, 'front');
 });
+
+
+test('frequent task updates never snap moving ants across the world',()=>{
+  const view=scene();view.setState(state('running'));
+  for(let frame=0;frame<1800;frame++){
+    const ant=view.ants.get('builder'),x=ant.x,y=ant.y;
+    if(frame%93===0)view.setState(state(['running','queued','done','failed'][Math.floor(frame/93)%4]));
+    view.update(1/60);
+    assert.ok(Math.hypot(ant.x-x,ant.y-y)<=3,'continuous frame-to-frame travel');
+  }
+});
+test('new workers enter through the nursery and retain positions across polls',()=>{
+  const view=scene();view.setState(state('running'));
+  const workers={agents:[...state('running').agents,{id:'new-scout',role:'scout',status:'running'}],tasks:[]};
+  view.setState(workers);const ant=view.ants.get('new-scout');
+  assert.equal(ant.room,'nursery');assert.equal(ant.destination,'scouts');assert.ok(ant.path.length);
+  view.update(.05);const position={x:ant.x,y:ant.y};view.setState(workers);
+  assert.deepEqual({x:ant.x,y:ant.y},position);
+});

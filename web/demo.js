@@ -20,10 +20,133 @@ const DEMO_TASKS = [
 ];
 
 const WORKFLOWS = [
-  { id: "repository-survey", name: "Repository survey", steps: [{ id: "inventory", agent: "local-scanner" }, { id: "quality", agent: "local-analyzer" }, { id: "summary", agent: "local-reporter" }] },
-  { id: "feature-dev", name: "Feature development", steps: [{ id: "plan", agent: "planner" }, { id: "build", agent: "developer" }, { id: "verify", agent: "tester" }, { id: "review", agent: "reviewer" }] },
-  { id: "bug-fix", name: "Bug fix", steps: [{ id: "triage", agent: "triager" }, { id: "investigate", agent: "investigator" }, { id: "fix", agent: "fixer" }] },
-  { id: "security-audit", name: "Security audit", steps: [{ id: "scan", agent: "scanner" }, { id: "prioritize", agent: "prioritizer" }, { id: "fix", agent: "fixer" }, { id: "test", agent: "tester" }] },
+  { id: "repository-survey", name: "Repository survey", steps: [{ id: "inventory", agent: "scanner" }, { id: "quality-scan", agent: "analyzer" }, { id: "summary", agent: "reporter" }] },
+  {
+    "id": "bug-fix",
+    "name": "Bug Triage & Fix",
+    "steps": [
+      {
+        "id": "triage",
+        "agent": "triager"
+      },
+      {
+        "id": "investigate",
+        "agent": "investigator"
+      },
+      {
+        "id": "setup",
+        "agent": "setup"
+      },
+      {
+        "id": "fix",
+        "agent": "fixer"
+      },
+      {
+        "id": "verify",
+        "agent": "verifier"
+      },
+      {
+        "id": "pr",
+        "agent": "pr"
+      }
+    ]
+  },
+  {
+    "id": "feature-dev",
+    "name": "Feature Development Workflow",
+    "steps": [
+      {
+        "id": "plan",
+        "agent": "planner"
+      },
+      {
+        "id": "setup",
+        "agent": "setup"
+      },
+      {
+        "id": "implement",
+        "agent": "developer"
+      },
+      {
+        "id": "verify",
+        "agent": "verifier"
+      },
+      {
+        "id": "test",
+        "agent": "tester"
+      },
+      {
+        "id": "pr",
+        "agent": "developer"
+      },
+      {
+        "id": "review",
+        "agent": "reviewer"
+      }
+    ]
+  },
+  {
+    "id": "security-audit",
+    "name": "Security Audit & Fix",
+    "steps": [
+      {
+        "id": "scan",
+        "agent": "scanner"
+      },
+      {
+        "id": "prioritize",
+        "agent": "prioritizer"
+      },
+      {
+        "id": "setup",
+        "agent": "setup"
+      },
+      {
+        "id": "fix",
+        "agent": "fixer"
+      },
+      {
+        "id": "verify",
+        "agent": "verifier"
+      },
+      {
+        "id": "test",
+        "agent": "tester"
+      },
+      {
+        "id": "pr",
+        "agent": "pr"
+      }
+    ]
+  },
+  {
+    "id": "cli-task",
+    "name": "CLI specialist",
+    "steps": [
+      {
+        "id": "work",
+        "agent": "builder"
+      }
+    ]
+  },
+  {
+    "id": "cli-team",
+    "name": "Plan \u2192 build \u2192 verify",
+    "steps": [
+      {
+        "id": "plan",
+        "agent": "planner"
+      },
+      {
+        "id": "build",
+        "agent": "builder"
+      },
+      {
+        "id": "verify",
+        "agent": "verifier"
+      }
+    ]
+  }
 ];
 
 function stats(tasks) {
@@ -43,6 +166,7 @@ export class DemoColony {
       { id: "de-4", type: "step.done", message: "Clover finished the keyboard navigation plan", ts: isoAgo(9) },
     ];
     this.timers = new Set();
+    this.cancelledRuns = new Set();
   }
 
   getState() {
@@ -73,7 +197,7 @@ export class DemoColony {
       description: `Demo step for “${brief}”. This is sample output and does not touch your repository.`,
       kind: step.agent,
       status: index === 0 ? "running" : "queued",
-      assigned_to: `demo_${step.agent}_${index}`,
+      assigned_to: `demo_${runId}_${step.agent}_${index}`,
       depends_on: index ? [`${runId}-${workflow.steps[index - 1].id}`] : [],
       created_at: now,
       updated_at: now,
@@ -90,24 +214,31 @@ export class DemoColony {
   scheduleRun(tasks) {
     tasks.forEach((task, index) => {
       const timer = setTimeout(() => {
-        const previous = index ? tasks[index - 1] : null;
-        if (previous) previous.status = "done";
-        if (previous) previous.result = `Sample result from ${previous.kind}: completed the demo handoff.`;
-        task.status = index === tasks.length - 1 ? "review" : "running";
-        task.updated_at = new Date().toISOString();
-        const agent = this.agents.find((item) => item.id === task.assigned_to);
-        if (agent) agent.status = task.status;
-        this.events.unshift({ id: `event-${task.id}`, type: `step.${task.status}`, message: `${agent?.name ?? "An ant"} received the next demo handoff`, ts: task.updated_at });
-        window.dispatchEvent(new CustomEvent("demo-state-change"));
-      }, 4500 * (index + 1));
+        this.timers.delete(timer);
+        if (this.cancelledRuns.has(task.run_id)) return;
+        const now = new Date().toISOString();
+        task.status = "done"; task.updated_at = now;
+        task.result = `Sample result from ${task.kind}: completed the demo handoff.`;
+        const ant = this.agents.find(item => item.id === task.assigned_to);
+        if (ant) { ant.status = 'done'; ant.last_seen = now; }
+        const next = tasks[index + 1];
+        if (next) {
+          next.status = 'running'; next.updated_at = now;
+          const worker = this.agents.find(item => item.id === next.assigned_to);
+          if (worker) { worker.status = 'running'; worker.last_seen = now; }
+        }
+        this.events.unshift({ id: `event-${task.id}`, run_id: task.run_id, agent_id: task.assigned_to, type: next ? 'step.done' : 'run.completed', message: next ? `${ant?.name || 'Ant'} finished ${task.kind}; ${next.kind} received the handoff` : 'Demo mission completed', ts: now });
+        window.dispatchEvent(new CustomEvent('demo-state-change'));
+      }, 12000 * (index + 1));
       this.timers.add(timer);
     });
   }
 
   cancel(runId) {
+    this.cancelledRuns.add(runId);
     const now = new Date().toISOString();
     this.tasks.filter((task) => task.run_id === runId && ["running", "queued", "review"].includes(task.status)).forEach((task) => { task.status = "cancelled"; task.updated_at = now; });
-    this.agents.filter((agent) => this.tasks.some((task) => task.run_id === runId && task.assigned_to === agent.id)).forEach((agent) => { agent.status = "cancelled"; });
+    this.agents.filter((agent) => this.tasks.some((task) => task.run_id === runId && task.assigned_to === agent.id && task.status === "cancelled")).forEach((agent) => { agent.status = "cancelled"; });
     this.events.unshift({ id: `event-cancel-${runId}`, type: "run.cancelled", message: "Demo mission cancelled", ts: now });
     window.dispatchEvent(new CustomEvent("demo-state-change"));
   }

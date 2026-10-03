@@ -8,6 +8,8 @@ import { resolveBundledWorkflowsDir, resolveOpenClawConfigPath, resolveWorkflowR
 import type { RunInfo, StepInfo } from "../installer/status.js";
 import { getBridgeActivity, getBridgeAgents } from "./bridge.js";
 
+import { harnessWorkflows, harnessAvailability } from './harness.js';
+
 export interface WorkflowSummary {
   id: string;
   name: string;
@@ -27,6 +29,11 @@ export interface ColonyTask {
   result: string | null;
   error: string | null;
   run_id: string;
+  step_id: string;
+  workflow_id: string;
+  run_status: string;
+  retry_count: number;
+  expects: string;
 }
 
 export function isOpenClawConfigured(): boolean {
@@ -62,6 +69,7 @@ export function loadWorkflows(): WorkflowSummary[] {
   } catch {
     // A missing bundled directory is represented by an empty collection.
   }
+  results.push(...harnessWorkflows);
   return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -102,7 +110,7 @@ function normalizeStatus(step: JoinedStep): ColonyTask["status"] {
   if (step.run_status === "cancelled") return "cancelled";
   if (step.status === "failed") return "failed";
   if (step.status === "running") return normalizeRole(step.agent_id) === "reviewer" ? "review" : "running";
-  if (step.status === "pending") return normalizeRole(step.agent_id) === "reviewer" ? "review" : "queued";
+  if (step.status === "pending" || step.status === "waiting") return "queued";
   return "blocked";
 }
 
@@ -131,9 +139,14 @@ function getTasks(): ColonyTask[] {
       depends_on: previous ? [previous] : [],
       created_at: step.created_at,
       updated_at: step.updated_at,
-      result: status === "done" ? step.output : null,
+      result: ["done", "running", "review"].includes(status) ? step.output : null,
       error: status === "failed" || status === "cancelled" ? step.output : null,
       run_id: step.run_id,
+      step_id: step.step_id,
+      workflow_id: step.workflow_id,
+      run_status: step.run_status,
+      retry_count: step.retry_count,
+      expects: step.expects,
     };
   });
 }
@@ -157,7 +170,7 @@ export function getColonyState(workspace: string) {
     status: task.status,
     task_id: taskById.has(task.id) ? task.id : null,
     last_seen: task.updated_at,
-    source: "antfarm" as const,
+    source: task.assigned_to.startsWith("cli-") ? task.assigned_to.split("-")[1] : "antfarm",
     tool: null,
   }));
   const allAgents = [...agents, ...getBridgeAgents()].sort((a, b) => a.name.localeCompare(b.name));
@@ -170,6 +183,9 @@ export function getColonyState(workspace: string) {
     message: event.detail ?? ([event.agentId, event.stepId, event.storyTitle].filter(Boolean).join(" · ") || humanize(event.event)),
     ts: event.ts,
     source: "antfarm" as const,
+    run_id: event.runId,
+    agent_id: event.agentId,
+    step_id: event.stepId,
   }));
   const events = [...schedulerEvents, ...getBridgeActivity(100)]
     .sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 100);
@@ -188,7 +204,7 @@ export function getColonyState(workspace: string) {
     tasks,
     events,
     stats: { total: tasks.length, ...counts },
-    config: { openclawConfigured, runtimeAvailable: openclawConfigured && installedWorkflows.length > 0, installedWorkflows, workspace },
+    config: { openclawConfigured, runtimeAvailable: openclawConfigured && installedWorkflows.length > 0, installedWorkflows, workspace, harnesses: harnessAvailability() },
     workflows: loadWorkflows(),
   };
 }

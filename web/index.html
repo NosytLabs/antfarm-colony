@@ -85,8 +85,8 @@
             </header>
             <div class="onboarding__diagnostics" aria-live="polite">
               <span><small>WORKSPACE</small><b id="onboarding-workspace">Checking…</b></span>
-              <span><small>OPENCLAW</small><b id="onboarding-openclaw">Checking…</b></span>
-              <span><small>INSTALLED TEAMS</small><b id="onboarding-installed">Checking…</b></span>
+              <span><small>RUNTIMES</small><b id="onboarding-openclaw">Checking…</b></span>
+              <span><small>AVAILABLE TEAMS</small><b id="onboarding-installed">Checking…</b></span>
             </div>
             <ol class="onboarding__steps">
               <li id="onboarding-step-survey">
@@ -95,15 +95,15 @@
               </li>
               <li id="onboarding-step-connect">
                 <span class="onboarding__number">2</span>
-                <div><h3>Configure OpenClaw and a provider</h3><p>Bring your own configured runtime. Antseed, Ollama, and OpenCode adapters are documented setup options; availability, capabilities, and costs depend on your configuration.</p><button id="onboarding-connections" class="text-button" type="button">Open connection guide <span>→</span></button></div>
+                <div><h3>Choose your agent runtime</h3><p>Use OpenCode, Hermes, a custom CLI, or OpenClaw. Your runtime controls its own model and permissions.</p><button id="onboarding-connections" class="text-button" type="button">Open connection guide <span>→</span></button></div>
               </li>
               <li id="onboarding-step-install">
                 <span class="onboarding__number">3</span>
                 <div class="onboarding__install">
-                  <h3>Install a team, then dispatch</h3>
-                  <p>Installation is an explicit terminal action and updates the selected OpenClaw configuration.</p>
+                  <h3>Choose a team, then dispatch</h3>
+                  <p id="onboarding-install-note">CLI teams are built in. OpenClaw teams require installation.</p>
                   <label for="onboarding-workflow">Workflow team</label>
-                  <div class="onboarding__command-row"><select id="onboarding-workflow"><option value="feature-dev">Feature development</option><option value="bug-fix">Bug fix</option><option value="security-audit">Security audit</option></select><code id="onboarding-command">npm run cli -- workflow install feature-dev</code><button id="onboarding-copy" type="button">Copy</button></div>
+                  <div class="onboarding__command-row"><select id="onboarding-workflow"><option value="cli-team">CLI plan → build → verify</option><option value="cli-task">CLI specialist</option><option value="feature-dev">Feature development</option><option value="bug-fix">Bug fix</option><option value="security-audit">Security audit</option></select><code id="onboarding-command">npm run cli -- workflow install feature-dev</code><button id="onboarding-copy" type="button">Copy</button></div>
                   <button id="onboarding-dispatch" class="text-button" type="button">Open mission brief <span>→</span></button>
                 </div>
               </li>
@@ -209,7 +209,8 @@
         </section>
 
         <section class="page-view secondary-page" id="growth-view" data-page="growth" hidden>
-          <header class="page-header"><div><p class="eyebrow">COLONY MEMORY</p><h1>Growth &amp; achievements</h1><p>Progress comes from completed live work. Demo progress remains clearly marked.</p></div></header>
+          <header class="page-header"><div><p class="eyebrow">COLONY MEMORY</p><h1>A colony built by work</h1><p>Progress comes from completed live work. Demo progress remains clearly marked.</p></div></header>
+          <p id="growth-summary" class="growth-summary"></p>
           <div id="achievement-grid" class="achievement-grid"></div>
         </section>
       </main>
@@ -222,6 +223,7 @@
       <div class="dialog-body">
         <div id="mission-mode-note" class="notice"></div>
         <label class="field"><span>Workflow team</span><select id="mission-workflow" name="workflowId" required></select></label>
+        <label class="field" id="runtime-field" hidden><span>CLI runtime</span><select id="mission-runtime" name="runtime"></select></label>
         <div id="selected-workflow-steps" class="selected-steps"></div>
         <label class="field"><span>Mission brief</span><textarea id="mission-brief" name="task" rows="6" required minlength="4" maxlength="4000" placeholder="Describe the outcome, relevant context, and what done looks like…"></textarea><small><span id="brief-count">0</span> / <span id="brief-limit">4,000</span></small></label>
         <p class="form-error" id="mission-error" role="alert" hidden></p>
@@ -255,6 +257,11 @@
     <div class="dialog-shell">
       <header class="dialog-header"><div><p class="eyebrow">FIELD GUIDE</p><h2>How this colony works</h2></div><button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button></header>
       <div class="dialog-body prose">
+        <h3>OpenCode, Hermes, or any CLI</h3>
+        <p>Install and configure your preferred tool, then restart the dashboard. Choose <b>CLI specialist</b> or <b>Plan → build → verify</b> in New mission. Each step runs in a fresh process in the configured workspace. Results pass forward and persist locally.</p>
+        <p>OpenCode uses <code>opencode run --format json</code>. Hermes uses <code>hermes chat --format stream-json -q</code>. Keep the tool’s normal permissions configured; the colony does not bypass them.</p>
+        <p>Other harnesses use an owner-configured argument array: <code>ANTFARM_HARNESS_COMMAND='["your-cli","--prompt","{prompt}"]' npm start</code>. The mission replaces the prompt placeholder as one argument, without shell evaluation. Runtime output is retained locally.</p>
+        <p>Existing sessions can report status through <code>POST /api/bridge/events</code> with a runtime name, stable session ID, role and tool. Observed sessions remain controlled in their own CLI.</p>
         <p>Antfarm turns installed OpenClaw workflows into visible teams. Each ant represents a real workflow agent; each chamber groups a kind of work.</p>
         <h3>Live work</h3><p>Live missions are stored by the local Antfarm engine in SQLite. A workflow moves through its declared steps, carrying results from one specialist to the next.</p>
         <h3>Repository survey</h3><p>The built-in survey reads the configured directory locally and reports its inventory and quality signals. It does not edit source files or call a model.</p>

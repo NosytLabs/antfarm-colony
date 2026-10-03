@@ -77,8 +77,8 @@ test("OpenCode telemetry is validated, idempotent, and separate from workflow ta
   assert.ok(state.events.some((event) => event.id === "opencode:event-1" && event.type === "bridge.blocked"));
 });
 
-test("bridge rejects unsupported sources, fields, and enum values without storing payload content", async () => {
-  const badSource = await postEvent({ source: "other", sessionId: "s", eventId: "e", status: "running", role: "builder", name: "Bad" });
+test("bridge rejects invalid source names, fields, and enum values without storing payload content", async () => {
+  const badSource = await postEvent({ source: "invalid runtime!", sessionId: "s", eventId: "e", status: "running", role: "builder", name: "Bad" });
   assert.equal(badSource.status, 400);
 
   const prompt = await postEvent({ source: "opencode", sessionId: "s", eventId: "e", status: "running", role: "builder", name: "Bad", prompt: "private prompt" });
@@ -116,4 +116,14 @@ test("bridge bounds retained telemetry and marks sessions idle after fifteen min
   const agent = state.agents.find((candidate) => candidate.id === "opencode:stale-session");
   assert.equal(agent.status, "idle");
   assert.equal(agent.task_id, null);
+});
+
+
+test("different runtimes can reuse event and session IDs without collisions", async () => {
+  for(const source of ['hermes','custom-cli']) {
+    assert.equal((await postEvent({source, sessionId:'shared', eventId:'shared-event', status:'running', role:'planner', name:source})).status,202);
+  }
+  const state=await (await fetch(`${base}/api/state`)).json();
+  assert.ok(state.agents.some(a=>a.id==='hermes:shared'));
+  assert.ok(state.agents.some(a=>a.id==='custom-cli:shared'));
 });

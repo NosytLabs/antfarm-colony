@@ -1,7 +1,7 @@
 const panel = document.querySelector("#onboarding-panel");
 const ACKNOWLEDGED_KEY = "antfarm-colony-onboarding-acknowledged-v1";
 const WORKFLOW_KEY = "antfarm-colony-onboarding-workflow-v1";
-const VALID_WORKFLOWS = new Set(["feature-dev", "bug-fix", "security-audit"]);
+const VALID_WORKFLOWS = new Set(["cli-team", "cli-task", "feature-dev", "bug-fix", "security-audit"]);
 
 let latestState = null;
 let connected = false;
@@ -42,12 +42,15 @@ function surveyState(tasks) {
 
 function selectedWorkflow() {
   const value = get("#onboarding-workflow").value;
-  return VALID_WORKFLOWS.has(value) ? value : "feature-dev";
+  return VALID_WORKFLOWS.has(value) ? value : "cli-team";
 }
 
 function updateCommand() {
   const workflow = selectedWorkflow();
-  get("#onboarding-command").textContent = `npm run cli -- workflow install ${workflow}`;
+  const cli=workflow.startsWith('cli-');
+  get("#onboarding-command").textContent = cli?'Built in · select your CLI at dispatch':`npm run cli -- workflow install ${workflow}`;
+  get('#onboarding-copy').hidden=cli;
+  get('#onboarding-install-note').textContent=cli?'Each step launches your installed CLI with its own configured model and permissions.':'Install this OpenClaw team in the terminal to provision its agents and polling jobs.';
   writeLocal(WORKFLOW_KEY, workflow);
   renderDiagnostics();
 }
@@ -64,22 +67,26 @@ function renderDiagnostics() {
   const installed = Array.isArray(config.installedWorkflows) ? config.installedWorkflows : [];
   const survey = surveyState(Array.isArray(latestState.tasks) ? latestState.tasks : []);
   const workflow = selectedWorkflow();
-  const workflowInstalled = installed.includes(workflow);
+  const cliRuntimes=(config.harnesses||[]).filter(h=>h.available);
+  const cli=workflow.startsWith('cli-');
+  const runtimeReady=cli?cliRuntimes.length>0:config.openclawConfigured;
+  const workflowInstalled = cli?cliRuntimes.length>0:installed.includes(workflow);
 
   setDiagnostic("#onboarding-workspace", config.workspace || "Not reported", config.workspace ? "ready" : "missing");
-  setDiagnostic("#onboarding-openclaw", config.openclawConfigured ? "Configuration found" : "Not configured", config.openclawConfigured ? "ready" : "missing");
-  setDiagnostic("#onboarding-installed", installed.length ? installed.join(", ") : "None installed", installed.length ? "ready" : "missing");
+  const runtimeNames=[...cliRuntimes.map(h=>h.name),...(config.openclawConfigured?['OpenClaw']:[])];
+  setDiagnostic("#onboarding-openclaw",runtimeNames.join(', ')||'None detected',runtimeNames.length?'ready':'missing');
+  setDiagnostic("#onboarding-installed",[...(cliRuntimes.length?["CLI specialist", "CLI team"]:[]),...installed].join(", ")||"Local survey", "ready");
 
   get("#onboarding-step-survey").classList.toggle("is-complete", survey.completed);
-  get("#onboarding-step-connect").classList.toggle("is-complete", Boolean(config.openclawConfigured));
+  get("#onboarding-step-connect").classList.toggle("is-complete", Boolean(runtimeReady));
   get("#onboarding-step-install").classList.toggle("is-complete", workflowInstalled);
   get("#onboarding-survey").firstChild.textContent = survey.active ? "Survey in progress " : survey.completed ? "Run survey again " : "Start read-only survey ";
-  get("#onboarding-dispatch").firstChild.textContent = workflowInstalled && config.openclawConfigured ? "Open mission brief " : "Preview mission brief ";
+  get("#onboarding-dispatch").firstChild.textContent = workflowInstalled && runtimeReady ? "Open mission brief " : "Preview mission brief ";
 
   const message = survey.active
     ? "The local survey is running. Diagnostics refresh automatically."
-    : workflowInstalled && config.openclawConfigured
-      ? `${workflow} is installed and OpenClaw configuration was detected.`
+    : workflowInstalled && runtimeReady
+      ? `${workflow} is ready with ${cli?cliRuntimes.map(h=>h.name).join(" / "):"OpenClaw"}.`
       : "Status comes from the live local API. No setup action runs automatically.";
   get("#onboarding-status").textContent = message;
 }

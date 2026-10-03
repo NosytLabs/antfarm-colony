@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — Working teams across CLI runtimes
+
+- Fixed the upstream verify-each handoff deadlock, polling readiness, and late responses changing cancelled runs.
+- Added OpenCode, Hermes and custom CLI execution, durable output, sequential handoffs, verification gates, cancellation, failed-step resume and restart recovery.
+- Generalized the observation bridge with runtime-scoped identities and a migration preserving OpenCode history.
+- Grouped mission steps, added live side inspectors, story acceptance criteria, runtime selection and current tool output.
+- Fixed demo cancellation/final completion, full upstream sample pipelines, browser history navigation and stale asset caching.
+- Regenerated the 32-frame ant animation set and underground habitat; normalized role anchors, continuous tunnel routes and distinct worker spots.
+- Unified setup guidance, growth summaries and mobile inspectors.
+
 ## 0.1.1 — Reliable colony movement
 
 - Recovered the original Colony checkpoint and Git history into `NosytLabs/antfarm-colony`.

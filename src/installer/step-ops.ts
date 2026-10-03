@@ -446,20 +446,35 @@ function runHasStories(runId: string): boolean {
 
 // ── Peek (lightweight work check) ───────────────────────────────────
 
+// Both polling and claiming use the same readiness rule. A verify-each step
+// is the one exception to sequential gating: its parent loop stays running
+// after finishing a story, until this verifier returns the handoff.
+const CLAIMABLE_SQL = `s.status = 'pending' AND r.status = 'running'
+  AND NOT EXISTS (
+    SELECT 1 FROM steps prev
+    WHERE prev.run_id = s.run_id AND prev.step_index < s.step_index
+      AND prev.status NOT IN ('done', 'skipped')
+      AND NOT (
+        prev.type = 'loop' AND prev.status = 'running'
+        AND prev.current_story_id IS NULL
+        AND COALESCE(json_extract(CASE WHEN json_valid(prev.loop_config) THEN prev.loop_config ELSE '{}' END, '$.verifyEach'), 0) = 1
+        AND COALESCE(json_extract(CASE WHEN json_valid(prev.loop_config) THEN prev.loop_config ELSE '{}' END, '$.verifyStep'), '') = s.step_id
+      )
+  )`;
+
 export type PeekResult = "HAS_WORK" | "NO_WORK";
 
 /**
- * Lightweight check: does this agent have any pending/waiting steps in active runs?
+ * Lightweight check: does this agent have a claimable pending step in an active run?
  * Unlike claimStep(), this runs a single cheap COUNT query — no cleanup, no context resolution.
- * Returns "HAS_WORK" if any pending/waiting steps exist, "NO_WORK" otherwise.
+ * Returns "HAS_WORK" only when the step can pass the same gate used by claimStep().
  */
 export function peekStep(agentId: string): PeekResult {
   const db = getDb();
   const row = db.prepare(
     `SELECT COUNT(*) as cnt FROM steps s
      JOIN runs r ON r.id = s.run_id
-     WHERE s.agent_id = ? AND s.status IN ('pending', 'waiting')
-       AND r.status = 'running'`
+     WHERE s.agent_id = ? AND ${CLAIMABLE_SQL}`
   ).get(agentId) as { cnt: number };
   return row.cnt > 0 ? "HAS_WORK" : "NO_WORK";
 }
@@ -495,14 +510,7 @@ export function claimStep(agentId: string): ClaimResult {
     `SELECT s.id, s.step_id, s.run_id, s.input_template, s.type, s.loop_config, s.step_index
      FROM steps s
      JOIN runs r ON r.id = s.run_id
-     WHERE s.agent_id = ? AND s.status = 'pending'
-       AND r.status NOT IN ('failed', 'cancelled')
-       AND NOT EXISTS (
-         SELECT 1 FROM steps prev
-         WHERE prev.run_id = s.run_id
-           AND prev.step_index < s.step_index
-           AND prev.status NOT IN ('done', 'skipped')
-       )
+     WHERE s.agent_id = ? AND ${CLAIMABLE_SQL}
     ORDER BY s.step_index ASC, s.step_id ASC
      LIMIT 1`
   ).get(agentId) as {
@@ -680,14 +688,14 @@ export function completeStep(stepId: string, output: string): { advanced: boolea
   const db = getDb();
 
   const step = db.prepare(
-    "SELECT id, run_id, step_id, step_index, type, loop_config, current_story_id FROM steps WHERE id = ?"
-  ).get(stepId) as { id: string; run_id: string; step_id: string; step_index: number; type: string; loop_config: string | null; current_story_id: string | null } | undefined;
+    "SELECT id, run_id, step_id, step_index, type, loop_config, current_story_id, status FROM steps WHERE id = ?"
+  ).get(stepId) as { id: string; run_id: string; step_id: string; step_index: number; type: string; loop_config: string | null; current_story_id: string | null; status: string } | undefined;
 
   if (!step) throw new Error(`Step not found: ${stepId}`);
 
-  // Guard: don't process completions for failed runs
+  // Ignore late or duplicate responses after a run or step has stopped.
   const runCheck = db.prepare("SELECT status FROM runs WHERE id = ?").get(step.run_id) as { status: string } | undefined;
-  if (runCheck?.status === "failed") {
+  if (runCheck?.status !== "running" || step.status !== "running") {
     return { advanced: false, runCompleted: false };
   }
 
@@ -1036,8 +1044,9 @@ export async function failStep(stepId: string, error: string): Promise<{ retryin
   const db = getDb();
 
   const step = db.prepare(
-    "SELECT run_id, step_id, retry_count, max_retries, type, current_story_id FROM steps WHERE id = ?"
+    "SELECT run_id, step_id, retry_count, max_retries, type, current_story_id, status FROM steps WHERE id = ?"
   ).get(stepId) as {
+    status: string;
     run_id: string;
     step_id: string;
     retry_count: number;
@@ -1047,6 +1056,9 @@ export async function failStep(stepId: string, error: string): Promise<{ retryin
   } | undefined;
 
   if (!step) throw new Error(`Step not found: ${stepId}`);
+
+  const runState = db.prepare("SELECT status FROM runs WHERE id = ?").get(step.run_id) as { status: string } | undefined;
+  if (runState?.status !== 'running' || step.status !== 'running') return { retrying: false, runFailed: runState?.status === 'failed' };
 
   // T9: Loop step failure — per-story retry
   if (step.type === "loop" && step.current_story_id) {

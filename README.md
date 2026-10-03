@@ -33,8 +33,8 @@ Setup saves the workspace and port. Use `npm run setup -- --check` for diagnosti
 ## What lives here
 
 - Six connected chambers, four ant roles with 32 walking/working frames, 24 props and structures, and original forest cutaway artwork.
-- Real task/run inspectors, dependency handoffs, event trail, completed-work filtering, and run controls.
-- A credential-free repository survey plus feature-development, bug-fix, and security-audit workflows.
+- Missions grouped by run with live step output, acceptance criteria, stories, retries, dependency handoffs, and a side inspector that stays open as work progresses.
+- A credential-free repository survey; OpenCode, Hermes, or custom CLI single-worker and plan/build/verify teams; and the full upstream OpenClaw feature-development, bug-fix and security-audit workflows.
 - Separate **Live** and **Demo** modes. Demo missions run only in browser memory and are labeled throughout.
 - Seven growth milestones derived from task history; completed work adds colony decorations.
 - Three themes, labels and trail toggles, reduced motion, animation pause, zoom/pan, keyboard controls, and JSON snapshot export.
@@ -44,6 +44,18 @@ Setup saves the workspace and port. Use `npm run setup -- --check` for diagnosti
 This visualizes durable workflow state. Fading trails show completed handoffs; they are not an ACO scheduler or proof of a fully decentralized swarm.
 
 ## Connect real AI workers
+
+**OpenCode or Hermes:** configure the CLI and its model/provider first, then restart Colony. In **New mission**, choose **CLI specialist** or **Plan → build → verify**, select the detected runtime, and describe the outcome. Each step starts a fresh process in `ANTFARM_WORKSPACE`. The panel shows public output and tool status as they arrive. Cancellation stops the process; a failed run can resume from its unfinished step. Completed results are preserved. Verification requires an explicit `VERDICT: PASS`.
+
+**Any other noninteractive CLI:** configure an argument array on the server. The prompt is passed literally without a shell:
+
+```sh
+ANTFARM_HARNESS_COMMAND='["your-cli","--prompt","{prompt}"]' npm start
+```
+
+Choose **Custom CLI** at dispatch. Use the command and flags your harness supports. Tools retain their own models, permissions and costs. CLI role instructions are guidance; tool access restrictions come from the runtime. One CLI mission runs at a time per dashboard process to avoid concurrent edits in its workspace. Steps have a 30-minute timeout; the last 64 KiB of public output is retained per step and the latest 12 KiB is available for handoffs. An interrupted run requires explicit resume after restart. [Runtime guide](docs/integrations.md).
+
+**OpenClaw:** the original YAML workflow engine remains available:
 
 Configure [OpenClaw](https://docs.openclaw.ai/) separately, including provider credentials and tools. Then explicitly install a bundled workflow:
 
@@ -77,7 +89,7 @@ Merge the printed entry into OpenClaw, preserving existing settings, select `ant
 
 The connector installs **@antseed/cli 0.1.168** in isolated colony state, uses zero input/output/cached token price caps, refuses an occupied proxy port, and never automatically funds a wallet. Antseed does **not** guarantee free models: sellers control availability, quotas and prices. A zero-token offer in the catalog is discovery metadata, not a successful inference check. Local Ollama is another option without per-token provider fees; it needs suitable hardware. See the [complete Antseed guide](docs/antseed.md).
 
-For OpenCode, copy the [telemetry plugin](integrations/opencode/README.md) into your project. Those ants reflect external sessions; workflow controls remain in OpenCode.
+For sessions you start outside Colony, the optional [OpenCode telemetry plugin](integrations/opencode/README.md) reports status. Other runtimes can use the same metadata event API with their own source name. Observed sessions stay controlled in their original CLI; missions dispatched by Colony have local start/cancel/resume controls.
 
 ## Controls
 

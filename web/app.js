@@ -48,6 +48,8 @@ const app = {
   pollTimer: 0,
   selectedTab: "missions",
   selectedId: null,
+  inspection: null,
+  inspectionSignature: "",
   inspectorVersion: 0,
   settings: readSettings(),
   demo: new DemoColony(),
@@ -171,7 +173,7 @@ function renderConnection(error = "") {
   if (app.connected) {
     banner.hidden = true;
     dot.className = "status-dot ok";
-    $("#scene-status").textContent = `${app.data.stats.running + app.data.stats.review} moving · ${app.data.stats.queued} waiting`;
+    $("#scene-status").textContent = `${app.data.agents.filter(a=>["running","review"].includes(a.status)).length} working · ${app.data.stats.queued} waiting`;
   } else {
     banner.hidden = false;
     banner.replaceChildren();
@@ -191,6 +193,7 @@ async function setMode(mode) {
   app.liveAbort?.abort();
   app.liveAbort = null;
   app.pollToken = null;
+  $("#inspector-dialog").close();
   app.mode = mode;
   clearTimeout(app.pollTimer);
   $$("[data-mode]").forEach((button) => button.classList.toggle("is-active", button.dataset.mode === mode));
@@ -223,32 +226,51 @@ function render({ preserveFocus } = {}) {
   $("#scene-mode-label").textContent = app.mode === "demo" ? "DEMO COLONY" : "LIVE COLONY";
   const latestMark = app.data.events[0]?.ts || app.data.tasks[0]?.updated_at;
   $("#scene-updated").textContent = latestMark ? `Last mark ${relativeTime(latestMark)}` : "No trail marks yet";
-  $("#active-count").textContent = String((app.data.stats.running || 0) + (app.data.stats.review || 0));
-  $("#mission-count").textContent = String(app.data.tasks.length);
+  $("#active-count").textContent = String(app.data.agents.filter(a=>["running","review"].includes(a.status)).length);
+  $("#mission-count").textContent = String(missions().length);
   $("#ant-count").textContent = String(app.data.agents.length);
   $("#event-count").textContent = String(app.data.events.length);
-  $("#scene-empty").hidden = !(app.mode === "live" && app.connected && app.data.tasks.length === 0);
+  $("#scene-empty").hidden = !(app.mode === "live" && app.connected && app.data.tasks.length === 0 && app.data.agents.length === 0);
   scene.setState(app.data);
   scene.setSettings(app.settings);
   renderActivity();
   renderWorkflows();
   renderGrowth();
   syncMissionDialog();
+  refreshInspector();
   if (preserveFocus && preserveFocus.isConnected) preserveFocus.focus({ preventScroll: true });
 }
 
+function missions() {
+  const groups=new Map();
+  for(const task of app.data.tasks){const id=task.run_id||task.id;if(!groups.has(id))groups.set(id,[]);groups.get(id).push(task);}
+  return [...groups].map(([id,steps])=>{
+    const status=steps.every(t=>t.status==='done')?'done':steps.some(t=>t.status==='failed')?'failed':steps.some(t=>t.status==='cancelled')?'cancelled':steps.some(t=>['running','review'].includes(t.status))?'running':'queued';
+    const current=steps.find(t=>['running','review','failed'].includes(t.status))||steps.find(t=>t.status!=='done')||steps.at(-1);
+    return {id,steps,status,current,completed:steps.filter(t=>t.status==='done').length,title:shortTitle(steps[0].title),updated_at:steps.map(t=>t.updated_at).sort().at(-1)};
+  });
+}
 function filteredTasks() {
   const filter = $("#status-filter").value;
-  if (filter === "active") return app.data.tasks.filter((task) => STATUS_ACTIVE.has(task.status));
-  if (filter === "done") return app.data.tasks.filter((task) => task.status === "done");
-  if (filter === "failed") return app.data.tasks.filter((task) => ["failed", "cancelled"].includes(task.status));
-  return app.data.tasks;
+  const runs=missions();
+  if (filter === "active") return runs.filter(run => STATUS_ACTIVE.has(run.status));
+  if (filter === "done") return runs.filter(run => run.status === "done");
+  if (filter === "failed") return runs.filter(run => ["failed", "cancelled"].includes(run.status));
+  return runs;
+}
+function missionItem(run){
+  const button=el('button','activity-item mission-item');button.type='button';button.dataset.taskId=run.current.id;
+  const top=el('div','activity-item-top');top.append(el('h3','',run.title),statusBadge(run.status));
+  const label=run.current.step_id||run.current.title.split(' · ').at(-1);
+  const progress=el('progress','mission-progress');progress.max=run.steps.length;progress.value=run.completed;progress.setAttribute('aria-label',`${run.completed} of ${run.steps.length} steps complete`);
+  button.append(top,el('p','',`${run.completed} / ${run.steps.length} steps · ${nice(label)}`),progress,el('small','runtime-label',run.current.workflow_id==='cli-task'?'CLI specialist':run.current.workflow_id?.startsWith('cli-')?'CLI team':nice(run.current.workflow_id||'Demo team')));
+  button.addEventListener('click',()=>inspectTask(run.current));return button;
 }
 
 function renderActivity() {
   const panel = $("#activity-panel");
   const data = app.selectedTab === "missions" ? filteredTasks() : app.selectedTab === "ants" ? app.data.agents : app.data.events;
-  const signature = JSON.stringify([app.mode, app.selectedTab, $("#status-filter").value, data.map((item) => [item.id, item.status, item.updated_at, item.last_seen, item.task_id, item.ts])]);
+  const signature = JSON.stringify([app.mode, app.selectedTab, $("#status-filter").value, data]);
   if (signature === app.signatures.activity) return;
   app.signatures.activity = signature;
   panel.replaceChildren();
@@ -257,7 +279,7 @@ function renderActivity() {
     const empty = el("div", "list-empty");
     empty.append(iconPath("M12 4v4m0 8v4M4 12h4m8 0h4M6.3 6.3l2.8 2.8m5.8 5.8 2.8 2.8m0-11.4-2.8 2.8m-5.8 5.8-2.8 2.8"), el("h3", "", app.selectedTab === "missions" ? "No missions on this trail" : app.selectedTab === "ants" ? "No ants have reported in" : "No trail marks yet"), el("p", "", app.mode === "demo" ? "Launch a sample workflow to watch the handoffs." : "Live activity will appear here as the engine records it."));
     panel.append(empty);
-  } else if (app.selectedTab === "missions") data.forEach((task) => panel.append(taskItem(task)));
+  } else if (app.selectedTab === "missions") data.forEach((run) => panel.append(missionItem(run)));
   else if (app.selectedTab === "ants") data.forEach((agent) => panel.append(agentItem(agent)));
   else data.slice().sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts)).slice(0, 80).forEach((event) => panel.append(eventItem(event)));
   const summary = app.selectedTab === "missions" ? `${data.length} ${data.length === 1 ? "mission" : "missions"}` : app.selectedTab === "ants" ? `${data.length} specialists` : `${data.length} recent marks`;
@@ -281,9 +303,10 @@ function taskItem(task) {
 function agentItem(agent) {
   const button = el("button", "activity-item ant-item");
   button.type = "button";
-  const avatar = el("span", "avatar", String(agent.name || agent.id).slice(0, 1).toUpperCase());
+  const avatar = el("span", "avatar", "");
+  avatar.dataset.role=roleOf(agent);
   const copy = el("span");
-  copy.append(el("h3", "", agent.name || nice(agent.id)), el("p", "", `${nice(agent.role)} · ${agent.source === "opencode" ? agent.tool || "OpenCode session" : agent.task_id ? "on a mission" : "in the nursery"}`));
+  copy.append(el("h3", "", agent.name || nice(agent.id)), el("p", "", `${nice(agent.role)} · ${agent.tool || (app.data.tasks.find(t=>t.id===agent.task_id)?.step_id) || (agent.source && agent.source!=="antfarm" ? nice(agent.source) : nice(agent.status))}`));
   button.append(avatar, copy, statusBadge(agent.status));
   button.addEventListener("click", () => inspectAgent(agent));
   return button;
@@ -294,6 +317,7 @@ function eventItem(event) {
   const top = el("div", "activity-item-top");
   top.append(el("h3", "", nice(event.type)), el("time", "", relativeTime(event.ts)));
   item.append(top, el("p", "", event.message || "Colony activity recorded."));
+  if(event.run_id){item.tabIndex=0;item.setAttribute('role','button');const open=()=>{const task=app.data.tasks.find(t=>t.run_id===event.run_id);if(task)inspectTask(task);};item.addEventListener('click',open);item.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});}
   return item;
 }
 
@@ -304,12 +328,14 @@ function availableWorkflows() {
 }
 
 function workflowDescription(workflow) {
+  if(workflow.id==='cli-task')return 'One specialist using OpenCode, Hermes, or your configured CLI. Follow output and stop the process from the colony.';
+  if(workflow.id==='cli-team')return 'Three fresh CLI sessions: plan, implement, then independently verify. Each specialist receives the previous results. Verification must report PASS.';
   return WORKFLOW_COPY[workflow.id] || `${workflow.steps?.length || 0} specialists carry this mission from intake to result.`;
 }
 
 function renderWorkflows() {
   const workflows = availableWorkflows();
-  const signature = JSON.stringify(workflows);
+  const signature = JSON.stringify([app.mode,workflows,app.data.config]);
   if (signature === app.signatures.workflows) return;
   app.signatures.workflows = signature;
   const preview = $("#workflow-preview");
@@ -333,8 +359,9 @@ function workflowCard(flow) {
   const card = el("article", "workflow-card");
   const head = el("div", "workflow-card-head");
   const copy = el("div");
-  copy.append(el("p", "eyebrow", flow.id === "repository-survey" ? "LOCAL UTILITY" : "OPENCLAW TEAM"), el("h2", "", flow.name || nice(flow.id)));
-  const launch = el("button", "", "Launch →");
+  copy.append(el("p", "eyebrow", flow.id === "repository-survey" ? "LOCAL UTILITY" : flow.id.startsWith("cli-") ? "ANY CLI RUNTIME" : "OPENCLAW TEAM"), el("h2", "", flow.name || nice(flow.id)));
+  const ready=app.mode==='demo'||flow.id==='repository-survey'||(flow.id.startsWith('cli-')?(app.data.config.harnesses||[]).some(h=>h.available):app.data.config.runtimeAvailable&&app.data.config.installedWorkflows.includes(flow.id));
+  const launch = el("button", "", ready?"Launch →":"Setup needed");
   launch.type = "button";
   launch.addEventListener("click", () => openMission(flow.id));
   head.append(copy, launch);
@@ -345,7 +372,7 @@ function workflowCard(flow) {
     node.append(el("b", "", `${index + 1}. ${nice(step.id)}`), el("small", "", nice(step.agent)));
     chain.append(node);
   });
-  card.append(head, description, chain);
+  card.append(head, description, chain,el("small","runtime-label",ready?"Ready to dispatch":"Open Connections to configure this runtime"));
   return card;
 }
 
@@ -378,6 +405,8 @@ function achievements() {
 
 function renderGrowth() {
   const data = achievements();
+  const completed=missions().filter(run=>run.status==='done').length;
+  $('#growth-summary').textContent=`${completed} completed mission${completed===1?'':'s'} · ${app.data.stats.done||0} finished steps · ${data.filter(item=>item.value>=item.target).length} milestones${app.mode==='demo'?' · sample progress':''}`;
   const signature = JSON.stringify([app.mode, data]);
   if (signature === app.signatures.growth) return;
   app.signatures.growth = signature;
@@ -425,10 +454,17 @@ function renderSelectedSteps() {
   const isSurvey = selected?.id === "repository-survey";
   $("#mission-brief").maxLength = isSurvey ? 200 : 4000;
   $("#brief-limit").textContent = isSurvey ? "200" : "4,000";
-  const liveDisabled = app.mode === "live" && !isSurvey && (!app.data.config.runtimeAvailable || !app.data.config.installedWorkflows.includes(selected?.id));
+  const isCli=selected?.id.startsWith('cli-');
+  $('#runtime-field').hidden=!isCli;
+  const runtimes=app.mode==='demo'?[{id:'sample',name:'Sample CLI',available:true}]:(app.data.config.harnesses||[]);
+  const runtimeSelect=$('#mission-runtime'), priorRuntime=runtimeSelect.value;
+  const runtimeSignature=JSON.stringify(runtimes);
+  if(runtimeSelect.dataset.signature!==runtimeSignature){runtimeSelect.dataset.signature=runtimeSignature;runtimeSelect.replaceChildren();for(const runtime of runtimes){const option=el('option','',`${runtime.name}${runtime.available?'':' — not installed'}`);option.value=runtime.id;option.disabled=!runtime.available;runtimeSelect.append(option);}runtimeSelect.value=runtimes.some(r=>r.id===priorRuntime&&r.available)?priorRuntime:runtimes.find(r=>r.available)?.id||'';}
+  const liveDisabled = app.mode === "live" && !isSurvey && (isCli?!runtimes.some(r=>r.available):(!app.data.config.runtimeAvailable || !app.data.config.installedWorkflows.includes(selected?.id)));
   const note = $("#mission-mode-note");
   if (app.mode === "demo") note.textContent = "Demo dispatch: this mission runs a browser-only sample and never writes to the live colony.";
   else if (isSurvey) note.textContent = `Local survey: reads ${app.data.config.workspace || "the configured directory"} and reports findings without editing source files.`;
+  else if (isCli) note.textContent=liveDisabled?'Install OpenCode or Hermes, or configure a custom CLI, then restart this dashboard. See Connections.':`Runs ${runtimeSelect.selectedOptions[0]?.textContent||'your CLI'} in ${app.data.config.workspace}. It uses that tool’s configured model, costs and permissions. Output stays in local mission history.`;
   else if (liveDisabled) note.textContent = "OpenClaw is not connected or this workflow is not installed. Open Connections for setup guidance.";
   else note.textContent = "Live dispatch: this starts a real installed OpenClaw workflow on the local engine.";
   note.classList.toggle("error", liveDisabled);
@@ -456,13 +492,16 @@ async function submitMission(event) {
     let run;
     if (app.mode === "demo") run = await app.demo.launch(workflowId, task);
     else if (workflowId === "repository-survey") run = await request("/api/survey", { method: "POST", body: JSON.stringify({ title: task }) });
-    else run = await request("/api/runs", { method: "POST", body: JSON.stringify({ workflowId, task }) });
+    else run = await request("/api/runs", { method: "POST", body: JSON.stringify({ workflowId, task, runtime: $("#mission-runtime").value }) });
     $("#mission-dialog").close();
     $("#mission-brief").value = ""; $("#brief-count").textContent = "0";
     const runId = run?.id || run?.run?.id;
     toast(`Mission dispatched${runId ? ` · ${String(runId).slice(0, 8)}` : ""}`);
     if (app.mode === "demo") { app.data = normalizeState(app.demo.getState()); render(); }
     else await refreshLive({ announceError: true });
+    setView("colony");
+    $("#status-filter").value="all"; $("#missions-tab").click();
+    const dispatched=app.data.tasks.find(t=>t.run_id===runId);if(dispatched)inspectTask(dispatched);
   } catch (error) {
     errorBox.textContent = error.message; errorBox.hidden = false;
   } finally {
@@ -482,6 +521,7 @@ function detailSection(label, text, isError = false) {
 function setInspector(title, eyebrow = "MISSION DETAILS") {
   app.inspectorVersion += 1;
   app.selectedId = null;
+  app.inspection=null;
   $("#inspector-title").textContent = title;
   $("#inspector-eyebrow").textContent = eyebrow;
   $("#inspector-body").replaceChildren();
@@ -491,45 +531,47 @@ function setInspector(title, eyebrow = "MISSION DETAILS") {
 
 async function inspectTask(task) {
   setInspector(shortTitle(task.title));
-  app.selectedId = task.id;
-  const version = app.inspectorVersion;
-  const body = $("#inspector-body");
-  const grid = el("div", "detail-grid");
-  grid.append(detailCell("Status", nice(task.status)), detailCell("Specialist", nice(task.assigned_to || task.kind)), detailCell("Updated", relativeTime(task.updated_at)), detailCell("Run", task.run_id ? String(task.run_id).slice(0, 12) : "—"));
-  body.append(grid, detailSection("Mission brief", task.description));
-  if (task.depends_on?.length) {
-    const section = el("section", "detail-section"); section.append(el("h3", "", "Depends on")); const list = el("div", "dependency-list"); task.depends_on.forEach((id) => list.append(el("span", "", String(id)))); section.append(list); body.append(section);
+  app.selectedId=task.id; app.inspection={type:'task',id:task.id};
+  const version=app.inspectorVersion, body=$('#inspector-body');
+  const run=missions().find(r=>r.id===(task.run_id||task.id));
+  const grid=el('div','detail-grid');grid.append(detailCell('Mission',nice(run?.status||task.status)),detailCell('Progress',`${run?.completed||0} / ${run?.steps.length||1} steps`),detailCell('Runtime',task.workflow_id?.startsWith('cli-')?nice(task.assigned_to.split('-')[1]):app.mode==='demo'?'Sample team':task.kind==='survey'?'Local survey':'OpenClaw'),detailCell('Updated',relativeTime(run?.updated_at||task.updated_at)));body.append(grid);
+  const steps=el('section','detail-section');steps.append(el('h3','','Work & handoffs'));
+  for(const step of run?.steps||[task]){
+    const detail=el('details','step-detail');detail.dataset.step=step.id;detail.open=step.id===task.id||['running','review','failed'].includes(step.status);
+    const summary=el('summary');summary.append(el('b','',nice(step.step_id||step.title.split(' · ').at(-1))),statusBadge(step.status));
+    detail.append(summary,el('p','step-owner',`${nice(step.assigned_to.split('_').at(-1))} · ${step.retry_count||0} retries`));
+    if(step.result)detail.append(detailSection(step.status==='done'?'Result':'Latest output',step.result));
+    if(step.error)detail.append(detailSection('Issue to resolve',step.error,true));
+    if(!step.result&&!step.error)detail.append(el('p','step-owner',step.status==='queued'?'Waiting for the previous handoff.':'The runtime has not reported output yet.'));
+    const brief=el('details','step-brief');brief.append(el('summary','','Instructions & acceptance'),el('pre','',`${step.description}\n\nCompletion gate: ${step.expects||'Runtime reports completion'}`));detail.append(brief);steps.append(detail);
   }
-  if (task.result) body.append(detailSection(app.mode === "demo" ? "Sample result" : "Result", task.result));
-  if (task.error) body.append(detailSection("Error", task.error, true));
-  addRunActions(task);
-  const dialog = $("#inspector-dialog"); if (!dialog.open) dialog.showModal();
-  if (app.mode === "live" && task.run_id) {
-    try {
-      const raw = await request(`/api/runs/${encodeURIComponent(task.run_id)}`);
-      if (app.inspectorVersion !== version || !dialog.open) return;
-      renderTimeline(raw, body);
-    } catch (error) {
-      if (app.inspectorVersion !== version || !dialog.open) return;
-      const note = el("p", "form-error", `Run timeline unavailable: ${error.message}`); note.hidden = false; body.append(note);
+  body.append(steps);
+  const activity=app.data.events.filter(event=>event.run_id===task.run_id).slice(0,12);
+  if(activity.length){const section=el('section','detail-section');section.append(el('h3','','Recent activity'));activity.forEach(event=>section.append(eventItem(event)));body.append(section);}
+  addRunActions(task);showInspector();rememberInspection();
+  if(app.mode==='live'&&task.run_id){
+    try{
+      const [raw,stories]=await Promise.all([request(`/api/runs/${encodeURIComponent(task.run_id)}`),request(`/api/runs/${encodeURIComponent(task.run_id)}/stories`)]);
+      if(app.inspectorVersion!==version||!$('#inspector-dialog').open)return;
+      if(Array.isArray(stories)&&stories.length){const section=el('section','detail-section');section.append(el('h3','',`Stories · ${stories.filter(story=>story.status==='done').length} / ${stories.length} complete`));for(const story of stories){const item=el('details','step-detail');const title=el('summary');title.append(el('b','',story.title),statusBadge(story.status));item.append(title,detailSection('Acceptance criteria',story.acceptance_criteria));if(story.output)item.append(detailSection('Result',story.output));section.append(item);}body.append(section);}
+      renderTimeline(raw,body);
     }
-  } else {
-    const related = app.data.tasks.filter((item) => item.run_id === task.run_id);
-    renderTimeline({ id: task.run_id, status: task.status, steps: related }, body);
+    catch(error){if(app.inspectorVersion===version&&$('#inspector-dialog').open)body.append(el('p','form-error',`Run details unavailable: ${error.message}`));}
   }
 }
-
-function renderTimeline(run, body) {
-  const section = el("section", "detail-section"); section.append(el("h3", "", "Run timeline"));
-  const timeline = el("div", "timeline");
-  (run.steps || []).forEach((step) => {
-    const status = step.status || "queued";
-    const row = el("div", `timeline-row ${status}`);
-    row.append(el("b", "", nice(step.step_id || step.id || "step")), el("small", "", nice(status)));
-    timeline.append(row);
-  });
-  section.append(timeline); body.append(section);
-  const details = el("details", "raw-details"); details.append(el("summary", "", "Raw run record"), el("pre", "", JSON.stringify(run, null, 2))); body.append(details);
+function renderTimeline(run,body){
+  const details=el('details','raw-details');details.append(el('summary','','Technical run record'),el('pre','',JSON.stringify(run,null,2)));body.append(details);
+}
+function showInspector(){const dialog=$('#inspector-dialog');if(!dialog.open)dialog.show();document.body.classList.add('inspector-open');}
+function rememberInspection(){app.inspectionSignature=JSON.stringify([app.data.tasks,app.data.agents,app.data.events]);}
+function refreshInspector(){
+  if(!app.inspection||!$('#inspector-dialog').open)return;
+  const signature=JSON.stringify([app.data.tasks,app.data.agents,app.data.events]);if(signature===app.inspectionSignature)return;
+  const selection={...app.inspection},body=$('#inspector-body'),scroll=body.scrollTop;
+  const openSteps=new Set($$('details[data-step][open]',body).map(d=>d.dataset.step));
+  if(selection.type==='task'){const item=app.data.tasks.find(t=>t.id===selection.id);if(item)inspectTask(item);}
+  else if(selection.type==='agent'){const item=app.data.agents.find(a=>a.id===selection.id);if(item)inspectAgent(item);}
+  $$('details[data-step]',body).forEach(d=>{if(openSteps.has(d.dataset.step))d.open=true;});body.scrollTop=scroll;rememberInspection();
 }
 
 function addRunActions(task) {
@@ -561,10 +603,15 @@ function inspectAgent(agent) {
   setInspector(agent.name || nice(agent.id), "SPECIALIST");
   const body = $("#inspector-body"); const grid = el("div", "detail-grid");
   grid.append(detailCell("Role", nice(roleOf(agent))), detailCell("Status", nice(agent.status)), detailCell("Last seen", relativeTime(agent.last_seen)), detailCell("Agent ID", agent.id)); body.append(grid);
-  if (agent.source === "opencode") body.append(detailSection("OpenCode observation", `Current tool: ${agent.tool || "none"}. This ant reflects an external session; control it in OpenCode. Telemetry does not create workflow results.`));
+  app.inspection={type:'agent',id:agent.id};scene.selected=agent.id;scene.dirty=true;
+  body.append(detailSection('Right now',`${nice(agent.source||'Demo')} · ${agent.tool || nice(agent.status)} · ${CHAMBERS.find(c=>c.id===chamberFor(agent))?.name}`));
+  if(agent.source&&agent.source!=='antfarm'&&!agent.task_id)body.append(el('p','step-owner',`Observed session. Control this agent in ${nice(agent.source)}.`));
   const task = app.data.tasks.find((item) => item.id === agent.task_id);
   if (task) { body.append(detailSection("Current mission", `${task.title}\n\n${task.description || ""}`)); const open = el("button", "button button-primary", "Inspect mission"); open.type = "button"; open.addEventListener("click", () => inspectTask(task)); $("#inspector-actions").prepend(open); }
-  const dialog = $("#inspector-dialog"); if (!dialog.open) dialog.showModal();
+  if(task?.result)body.append(detailSection('Latest output',task.result));
+  if(task?.error)body.append(detailSection('Issue to resolve',task.error,true));
+  app.data.events.filter(e=>e.agent_id===agent.id).slice(0,8).forEach(e=>body.append(eventItem(e)));
+  showInspector();rememberInspection();
 }
 
 function inspectSceneSelection(selection) {
@@ -578,14 +625,17 @@ function inspectSceneSelection(selection) {
     setInspector(chamber.name, "CHAMBER");
     const body = $("#inspector-body");
     body.append(detailSection(chamber.subtitle, agents.length ? `${agents.length} specialist${agents.length === 1 ? "" : "s"} currently ${chamber.id === "granary" ? "resting with completed work" : chamber.id === "nursery" ? "ready for a handoff" : "assigned here"}.` : "No specialist is currently assigned to this chamber."));
-    agents.forEach((agent) => body.append(agentItem(agent))); const dialog = $("#inspector-dialog"); if (!dialog.open) dialog.showModal();
+    agents.forEach((agent) => body.append(agentItem(agent))); showInspector();
   }
 }
 
-function setView(view) {
+function setView(view,writeHistory=true) {
+  if(!["colony","workflows","growth"].includes(view))view="colony";
   $$("[data-page]").forEach((section) => { section.hidden = section.dataset.page !== view; section.classList.toggle("is-active", section.dataset.page === view); });
   $$(".rail-link[data-view]").forEach((button) => { const active = button.dataset.view === view; button.classList.toggle("is-active", active); if (active) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current"); });
-  location.hash = view === "colony" ? "colony" : view;
+  if(writeHistory&&location.hash!==`#${view}`)history.pushState({},"",`#${view}`);
+  if(view!=="colony")$("#inspector-dialog").close();
+  requestAnimationFrame(()=>scene.resize());
   window.scrollTo({ top: 0, behavior: app.settings.reducedMotion ? "auto" : "smooth" });
 }
 
@@ -623,7 +673,7 @@ function exportSnapshot() {
 }
 
 function wireEvents() {
-  $("#inspector-dialog").addEventListener("close", () => { app.inspectorVersion += 1; app.selectedId = null; });
+  $("#inspector-dialog").addEventListener("close", () => { app.inspectorVersion += 1; app.selectedId = null; app.inspection=null; document.body.classList.remove("inspector-open"); });
   $$('[data-mode]').forEach((button) => button.addEventListener("click", () => setMode(button.dataset.mode)));
   $$('[data-open-mission]').forEach((button) => button.addEventListener("click", () => openMission()));
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
@@ -631,6 +681,9 @@ function wireEvents() {
   $$('[data-view-target]').forEach((button) => button.addEventListener("click", () => setView(button.dataset.viewTarget)));
   $("#connections-button").addEventListener("click", () => $("#guide-dialog").showModal());
   $("#settings-button").addEventListener("click", openSettings);
+  window.addEventListener("hashchange",()=>setView(location.hash.slice(1),false));
+  window.addEventListener("popstate",()=>setView(location.hash.slice(1),false));
+  $("#mission-runtime").addEventListener("change",renderSelectedSteps);
   $("#mission-workflow").addEventListener("change", renderSelectedSteps);
   $("#mission-form").addEventListener("submit", submitMission);
   $("#settings-form").addEventListener("submit", saveSettings);
@@ -663,6 +716,7 @@ function wireEvents() {
   window.addEventListener("demo-state-change", () => { if (app.mode === "demo") { app.data = normalizeState(app.demo.getState()); render(); } });
   window.addEventListener("beforeunload", () => { clearTimeout(app.pollTimer); app.demo.destroy(); scene.destroy(); });
   document.addEventListener("keydown", (event) => {
+    if(event.key==="Escape"&&$("#inspector-dialog").open&&!$("dialog:modal")){$("#inspector-dialog").close();return;}
     const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName) || event.target.isContentEditable;
     if (typing || event.metaKey || event.ctrlKey || event.altKey || $('dialog[open]')) return;
     if (event.key.toLowerCase() === "n") { event.preventDefault(); openMission(); }
@@ -676,5 +730,5 @@ $("#labels-toggle").checked = app.settings.labels;
 $("#trails-toggle").checked = app.settings.trails;
 setZoom(1);
 const initialView = ["workflows", "growth"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "colony";
-setView(initialView);
+setView(initialView,false);
 if (app.mode === "demo") { app.data = normalizeState(app.demo.getState()); render(); } else { render(); refreshLive(); }

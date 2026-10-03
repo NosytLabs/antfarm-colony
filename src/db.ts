@@ -85,6 +85,24 @@ function migrate(db: DatabaseSync): void {
       ON bridge_events(session_id, updated_at DESC);
   `);
 
+  const bridgeSql = (db.prepare("SELECT sql FROM sqlite_master WHERE name = 'bridge_events'").get() as { sql: string }).sql;
+  if (bridgeSql.includes("CHECK (source = 'opencode')")) {
+    db.exec(`BEGIN IMMEDIATE;
+      ALTER TABLE bridge_events RENAME TO bridge_events_v1;
+      DROP INDEX IF EXISTS idx_bridge_events_session_updated;
+      CREATE TABLE bridge_events (
+        event_id TEXT NOT NULL, source TEXT NOT NULL, session_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('running', 'idle', 'blocked', 'failed')),
+        role TEXT NOT NULL CHECK (role IN ('scout', 'builder', 'verifier', 'planner')),
+        name TEXT NOT NULL, tool TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY (source, event_id)
+      );
+      INSERT INTO bridge_events SELECT * FROM bridge_events_v1;
+      DROP TABLE bridge_events_v1;
+      CREATE INDEX idx_bridge_events_session_updated ON bridge_events(source, session_id, updated_at DESC);
+      COMMIT;`);
+  }
+
   // Add columns to steps table for backwards compat
   const cols = db.prepare("PRAGMA table_info(steps)").all() as Array<{ name: string }>;
   const colNames = new Set(cols.map((c) => c.name));
