@@ -37,6 +37,33 @@ mkdirSync('screenshots', { recursive: true });
 try {
   await page.goto(base);
   await loaded();
+  const sprites = await page.evaluate(async () => {
+    const { ColonyScene } = await import('/colony.js');
+    const canvas = document.createElement('canvas');
+    const labels = document.createElement('div');
+    const scene = new ColonyScene(canvas, labels, () => {});
+    scene.setPaused(true);
+    try {
+      await scene.ready;
+      if (scene.assetError) throw new Error(scene.assetError);
+      const sets = [scene.antFrames, scene.workFrames, scene.propFrames, scene.growthFrames];
+      const visible = sets.flat().every(frame => {
+        const pixels = frame.getContext('2d').getImageData(0, 0, frame.width, frame.height).data;
+        return pixels.some((alpha, index) => index % 4 === 3 && alpha > 0);
+      });
+      const aligned = [0, 1, 2, 3].every(row => {
+        const frames = [...scene.antFrames.slice(row * 4, row * 4 + 4), ...scene.workFrames.slice(row * 4, row * 4 + 4)];
+        return frames.every(frame => frame.width === frames[0].width && frame.height === frames[0].height);
+      });
+      scene.setSettings({ reducedMotion: true });
+      scene.setState({ agents: [{ id: 'builder', role: 'builder', status: 'running' }], tasks: [] });
+      scene.setState({ agents: [{ id: 'builder', role: 'builder', status: 'done' }], tasks: [] });
+      return { counts: sets.map(set => set.length), visible, aligned, room: scene.ants.get('builder').room };
+    } finally { scene.destroy(); }
+  });
+  check(JSON.stringify(sprites.counts) === '[16,16,16,8]' && sprites.visible, 'all 32 ant frames and 24 props contain visible artwork');
+  check(sprites.aligned, 'walking and working frames share stable role dimensions');
+  check(sprites.room === 'granary', 'reduced motion keeps task locations current');
   await page.locator('#scene-empty').waitFor({ state: 'visible' });
   check((await state()).tasks.length === 0, 'fresh live colony is empty');
   check(!await page.locator('#demo-banner').isVisible(), 'live work never shows a demo banner');
@@ -146,6 +173,7 @@ try {
   check(await page.locator('#guide-dialog').evaluate(node=>node.scrollWidth<=node.clientWidth),'desktop connection guide has no horizontal overflow');
   await page.keyboard.press('Escape');
   await page.locator('#missions-tab').click();
+  await page.locator('.toast').evaluateAll(nodes=>nodes.forEach(node=>node.remove()));
   await page.screenshot({ path: 'screenshots/colony-desktop.png', fullPage: true });
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'desktop has no horizontal overflow');
   const downloadEvent = page.waitForEvent('download');

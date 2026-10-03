@@ -16,6 +16,10 @@ writeFileSync(path.join(workspace, "app.ts"), "// TODO: cover this branch\nexpor
 writeFileSync(path.join(workspace, ".env"), "SECRET=must-not-be-read\n");
 mkdirSync(path.join(workspace, "node_modules"));
 writeFileSync(path.join(workspace, "node_modules", "ignored.js"), "FIXME ignored\n");
+for (const directory of ['dist', 'build', 'coverage', '.next', '.venv']) {
+  mkdirSync(path.join(workspace, directory));
+  writeFileSync(path.join(workspace, directory, 'generated.js'), '// FIXME: generated copy must not produce a source finding\n');
+}
 symlinkSync(path.join(workspace, "app.ts"), path.join(workspace, "linked.ts"));
 
 const { createDashboardServer } = await import("../dist/server/dashboard.js");
@@ -82,6 +86,7 @@ test("repository survey persists three real sequential reports", async () => {
   assert.equal(inventory.files, 2);
   assert.equal(inventory.skipped.symlinks, 1);
   assert.equal(inventory.skipped.sensitivePaths, 1);
+  assert.equal(inventory.skipped.generatedOrDependencyDirectories, 6);
   const summary = JSON.parse(run.steps[2].output);
   assert.ok(summary.findings.signals.some((signal) => signal.rule === "unfinished-work-marker" && signal.file === "app.ts"));
 

@@ -87,8 +87,18 @@ export class ColonyScene {
       }
       Object.assign(ant,agent);
       if(dest!==ant.destination){
-        ant.path=[{x:chamber(ant.room).x,y:chamber(ant.room).y},...routeBetween(ant.room,dest)];
+        // Finish the current tunnel segment before choosing a new route. Going
+        // straight back to the last room can cut across the chamber walls.
+        const nextRoomIndex=ant.path.findIndex(point=>CHAMBERS.some(c=>c.x===point.x&&c.y===point.y));
+        if(nextRoomIndex>=0){
+          const point=ant.path[nextRoomIndex];
+          const nextRoom=CHAMBERS.find(c=>c.x===point.x&&c.y===point.y);
+          ant.path=[...ant.path.slice(0,nextRoomIndex+1),...(nextRoom.id===dest?[]:routeBetween(nextRoom.id,dest))];
+        }else{
+          ant.path=[{x:chamber(ant.room).x,y:chamber(ant.room).y},...routeBetween(ant.room,dest)];
+        }
         ant.destination=dest;
+        if(this.settings.reducedMotion)this.settleAnt(ant);
       }
       ant.spriteRow={scout:0,builder:1,verifier:2,planner:3}[roleOf(agent)];
     }
@@ -97,7 +107,17 @@ export class ColonyScene {
     this.canvas.setAttribute('aria-label',(state.mode==='demo'?'Demo':'Live')+' ant colony with '+(state.agents||[]).length+' workers. Ant details are also available in the Ants tab.');
     this.dirty=true;
   }
-  setSettings(settings){Object.assign(this.settings,settings);this.labelsContainer.hidden=!this.settings.labels;this.dirty=true;}
+  settleAnt(ant){
+    const target=chamber(ant.destination);
+    ant.x=target.x+(ant.seed%7-3)*26;ant.y=target.y+(ant.seed%3-1)*12;
+    ant.room=ant.destination;ant.path=[];ant.moving=false;ant.restUntil=this.time+3;
+  }
+  setSettings(settings){
+    const wasReduced=this.settings.reducedMotion;
+    Object.assign(this.settings,settings);
+    if(this.settings.reducedMotion&&!wasReduced)for(const ant of this.ants.values())this.settleAnt(ant);
+    this.labelsContainer.hidden=!this.settings.labels;this.dirty=true;
+  }
   setPaused(paused){this.paused=!!paused;this.dirty=true;this.lastTime=0;}
   getZoom(){return this.zoom;}
   setZoom(zoom){this.zoom=Math.min(2.5,Math.max(1,Number(zoom)||1));if(this.zoom===1)this.camera={x:768,y:512};this.canvas.style.touchAction=this.zoom>1?'none':'pan-y';this.resize();return this.zoom;}
@@ -111,7 +131,7 @@ export class ColonyScene {
     this.dirty=true;
   }
   point(e){const r=this.canvas.getBoundingClientRect();return{x:(e.clientX-r.left-this.offsetX)/this.scale,y:(e.clientY-r.top-this.offsetY)/this.scale};}
-  hit(point){return [...this.ants.values()].reverse().find(a=>Math.abs(a.x-point.x)<49&&point.y<a.y+12&&point.y>a.y-66);}
+  hit(point){return [...this.ants.values()].sort((a,b)=>a.y-b.y).reverse().find(a=>Math.abs(a.x-point.x)<49&&point.y<a.y+12&&point.y>a.y-66);}
   pointerDown(e){this.drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,moved:false};if(this.zoom>1)this.canvas.setPointerCapture(e.pointerId);}
   pointerMove(e){
     if(this.drag&&this.zoom>1){
@@ -133,7 +153,13 @@ export class ColonyScene {
       ant.moving=false;
       if(ant.path.length){
         const next=ant.path[0],dx=next.x-ant.x,dy=next.y-ant.y,d=Math.hypot(dx,dy),speed=70+(ant.seed%25);
-        if(d<speed*dt+1){ant.x=next.x;ant.y=next.y;ant.path.shift();if(!ant.path.length){ant.room=ant.destination;ant.restUntil=this.time+3;}}
+        if(d<speed*dt+1){
+          ant.x=next.x;ant.y=next.y;ant.path.shift();
+          const arrived=CHAMBERS.find(c=>c.x===next.x&&c.y===next.y);
+          if(arrived)ant.room=arrived.id;
+          ant.moving=ant.path.length>0;
+          if(!ant.path.length){ant.room=ant.destination;ant.restUntil=this.time+3;}
+        }
         else{ant.x+=dx/d*speed*dt;ant.y+=dy/d*speed*dt;if(Math.abs(dx)>1)ant.facing=dx>0?1:-1;ant.moving=true;}
       }else if(this.time>(ant.restUntil||0)){
         const home=chamber(ant.room),phase=Math.floor(this.time/5)+(ant.seed%71);

@@ -1,13 +1,18 @@
 # Validation record — 2026-10-03
 
-Environment: Node 24.19.0, npm 11.9.0, Linux; Playwright 1.62.1 with the available Chromium executable. Tests use temporary workspaces and state. Agent Office remains unchanged at `35cf7fbdd06e56dc5fde5cdd228d5ff212ac0a1d`.
+Version 0.1.1 environment: macOS, Node 26.10.0, npm 12.1.0, Playwright 1.62.1 with local Chrome. Tests use temporary workspaces and state. The original 0.1.0 cloud checkpoint used Node 24.19.0 on Linux. CI verifies Node 24 on Ubuntu. Agent Office was not modified by this work.
+
+The 0.1.0 archive was recovered from the original chat and its SHA-256 verified as `b6c38b76ddc6cff2da390c5d99fd87ab2da96372b11a6dc0d710a9619cb6b6d0`. All 189 archive payload files matched the manifest. Its original source commit `a10ab565eca11abbbf9ba2bbe57c78045b0abf91` is preserved in this repository's history.
 
 ## Automated verification
 
-- `npm test`: **179 tests passed**, 37 suites, zero failures.
-- `npm run test:browser`: **36 browser checks passed**, zero page errors.
+- `npm test`: **183 tests passed**, 37 suites, zero failures.
+- `npm run test:browser`: **39 browser checks passed**, zero page errors.
+- Regression tests reproduce and cover mid-tunnel task changes, reduced-motion location updates, and selecting overlapping ants in paint order.
+- All 32 ant frames and 24 prop/structure frames contain visible artwork after extraction. Walking and working frames share stable dimensions for each role.
+- The patched YAML dependency has no known advisories in the current npm audit.
 - TypeScript build passed; browser modules parsed successfully.
-- Real SQLite-backed repository survey: inventory, quality scan and summary persist across reload. A fixture TODO is reported, sensitive files and dependency directories are excluded, and symlinks are skipped.
+- Real SQLite-backed repository survey: inventory, quality scan and summary persist across reload. A fixture TODO is reported, sensitive files, dependency/build/cache directories and virtual environments are excluded, and symlinks are skipped. The recovered repository was also surveyed locally through all three steps.
 - HTTP host/origin validation, request limits, disabled unconfigured AI dispatch, OpenCode telemetry validation, retention limits and stale-session handling are covered.
 - Antseed integration tests use a local HTTP fixture: zero and paid token rates, unknown pricing, cached-token charges, non-text models, invalid JSON and redirects. They send model-list GET requests only.
 - Dashboard port resolution is shared by foreground and daemon entry points; saved, environment and explicit overrides are checked, and an already-running daemon reports its actual port.
@@ -26,7 +31,7 @@ Screenshots in `screenshots/` cover desktop demo, live survey, mobile colony and
 
 The pinned `@antseed/cli@0.1.168` installed successfully in isolated temporary state. Its version, buyer-start flags and actual loaded configuration were verified; input/output/cached token caps were zero. A real buyer started on loopback port 8377 with isolated identity/state. Its model catalog timed out at both 3 and 15 seconds in this environment. The buyer was stopped. No inference, wallet funding or paid transaction was performed. The UI reports a discovery timeout and allows retry; it does not claim a model is working merely because configuration exists.
 
-OpenClaw-backed model execution, a real OpenCode session and provider tool compatibility require the user's configured services. Local tests and a successful CLI launch do not verify these. Antseed sellers may advertise zero prices, but availability, trust policy, quotas and capabilities still determine whether a task can run. OpenClaw workflow installation is an explicit step and can modify its configuration. GitHub publication requires repository creation through an authenticated account; no remote publication is claimed by this record.
+OpenClaw-backed model execution, a real OpenCode session and provider tool compatibility require the user's configured services. Local tests and a successful CLI launch do not verify these. Antseed sellers may advertise zero prices, but availability, trust policy, quotas and capabilities still determine whether a task can run. OpenClaw workflow installation is an explicit step and can modify its configuration. The Antseed launch described above belongs to the original cloud validation; this continuation verified the connector with local fixtures.
 
 ## Boundaries
 

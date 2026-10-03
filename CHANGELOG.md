@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1 — Reliable colony movement
+
+- Recovered the original Colony checkpoint and Git history into `NosytLabs/antfarm-colony`.
+- Keep ants inside their tunnel route when a mission changes while they travel.
+- Update chamber locations immediately in reduced-motion mode, including when enabled during travel.
+- Select the frontmost worker when ants overlap.
+- Exclude common generated files, caches and virtual environments from repository surveys and report skipped-directory counts.
+- Verify all 32 ant frames and 24 props in the browser, plus shared walking/working frame dimensions.
+- Update the YAML parser to a patched release and run verification on pushes to main.
+
 ## 0.1.0 — Antfarm Colony
 
 - New six-chamber ant colony interface, original sprite atlas and props.

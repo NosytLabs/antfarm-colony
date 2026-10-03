@@ -11,12 +11,16 @@ This is a **new, independent project** for NosytLabs. Agent Office remains uncha
 Requires **Node.js 24 or newer** and npm.
 
 ```sh
+git clone https://github.com/NosytLabs/antfarm-colony.git
+cd antfarm-colony
 npm ci
 npm run setup
 npm start
 ```
 
 Open **http://127.0.0.1:8114**. Choose **Start repository survey** for a real local inventory, quality report, and summary. No model credentials are needed. The survey reads the configured directory and does not edit it or execute its code.
+
+Surveys skip dependency, version-control, common build/cache and virtual-environment directories, sensitive filenames, and symlinks. Reports include skipped-directory counts so compiled copies do not inflate source findings.
 
 ```sh
 ANTFARM_WORKSPACE=/absolute/path/to/project npm start

@@ -10,7 +10,10 @@ const MAX_FILES = 4_000;
 const MAX_DIRECTORIES = 2_000;
 const MAX_BYTES_READ = 16 * 1024 * 1024;
 const MAX_FILE_BYTES = 256 * 1024;
-const SKIP_DIRECTORIES = new Set([".git", "node_modules", ".hg", ".svn"]);
+const SKIP_DIRECTORIES = new Set([
+  ".git", "node_modules", ".hg", ".svn", "dist", "build", "coverage",
+  ".next", ".nuxt", ".output", ".cache", ".venv", "venv", "__pycache__",
+]);
 const activeSurveys = new Set<string>();
 const cancelledSurveys = new Set<string>();
 
@@ -27,6 +30,7 @@ interface Inventory {
   directories: number;
   skippedSymlinks: number;
   skippedSensitive: number;
+  skippedDirectories: number;
   totalBytes: number;
   truncated: boolean;
 }
@@ -74,6 +78,7 @@ async function inventoryRepository(configuredRoot: string, runId: string): Promi
     directories: 0,
     skippedSymlinks: 0,
     skippedSensitive: 0,
+    skippedDirectories: 0,
     totalBytes: 0,
     truncated: false,
   };
@@ -109,6 +114,7 @@ async function inventoryRepository(configuredRoot: string, runId: string): Promi
       if (entry.isDirectory()) {
         if (!SKIP_DIRECTORIES.has(entry.name) && !isSensitiveName(entry.name)) pending.push(absolute);
         else if (isSensitiveName(entry.name)) inventory.skippedSensitive += 1;
+        else inventory.skippedDirectories += 1;
         continue;
       }
       if (!entry.isFile()) continue;
@@ -149,7 +155,7 @@ function inventoryReport(inventory: Inventory): string {
     directories: inventory.directories,
     totalBytes: inventory.totalBytes,
     topExtensions,
-    skipped: { symlinks: inventory.skippedSymlinks, sensitivePaths: inventory.skippedSensitive },
+    skipped: { symlinks: inventory.skippedSymlinks, sensitivePaths: inventory.skippedSensitive, generatedOrDependencyDirectories: inventory.skippedDirectories },
     limits: { maxFiles: MAX_FILES, maxDirectories: MAX_DIRECTORIES },
     truncated: inventory.truncated,
   }, null, 2);
@@ -245,6 +251,7 @@ function summaryReport(inventory: Inventory, quality: QualityReport): string {
     skipped: {
       symlinks: inventory.skippedSymlinks,
       sensitivePaths: inventory.skippedSensitive,
+      generatedOrDependencyDirectories: inventory.skippedDirectories,
       largeOrBinaryFiles: quality.skippedLargeOrBinary,
     },
     truncated: inventory.truncated || quality.truncated,
