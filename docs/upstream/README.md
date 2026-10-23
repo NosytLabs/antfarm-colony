@@ -126,7 +126,7 @@ steps:
     expects: "STATUS: done"
 ```
 
-Full guide: [docs/creating-workflows.md](docs/creating-workflows.md)
+Full guide: [docs/creating-workflows.md](creating-workflows.md)
 
 ---
 
@@ -198,7 +198,7 @@ antfarm dashboard status       # Check status
 
 ## License
 
-[MIT](LICENSE)
+[MIT](../../LICENSE)
 
 ---
 
